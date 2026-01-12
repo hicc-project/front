@@ -64,13 +64,7 @@ export default function HomeMobile() {
 
               <div style={styles.recImage}>
                 <div style={styles.imagePlaceholder} />
-                <button
-                  type="button"
-                  style={styles.starOnImage}
-                  aria-label="즐겨찾기"
-                >
-                  ☆
-                </button>
+          
               </div>
 
               <div style={styles.recFooter}>
@@ -246,8 +240,8 @@ const styles = {
 
   /* NEW */
   newSection: {
+    marginTop: 25,
     padding: "6px 14px 16px",
-    borderTop: `1px solid ${LINE}`,
   },
   newTitle: {
     fontSize: 22,

@@ -337,7 +337,7 @@ body {
   grid-template-columns: repeat(4, 1fr);
   align-items: center;
 
-  border-top: 1px solid #efefef;
+  
   z-index: 10000;
 }
 
@@ -367,7 +367,7 @@ body {
   line-height: 1;
 }
 
-/* 활성 탭(핑크) */
+/* 활성 탭 */
 .mnavActive {
   color: #A3E6F2;
 }

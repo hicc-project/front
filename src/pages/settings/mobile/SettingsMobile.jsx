@@ -194,6 +194,7 @@ const styles = {
     background: `linear-gradient(180deg, ${PINK} 0%, ${PINK_SOFT} 70%, #fff 100%)`,
     color: "#fff",
     textAlign: "center",
+    paddingBottom: 60,
   },
 
   bannerTop: {

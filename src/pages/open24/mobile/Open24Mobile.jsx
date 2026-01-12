@@ -208,7 +208,6 @@ const styles = {
   header: {
     padding: "18px 16px 14px 16px",
     background: "linear-gradient(180deg, #84DEEE 0%, #d1f0f6ff 70%, #FFFFFF 100%)",
-    borderBottom: `1px solid ${LINE}`,
     textAlign: "center",
   },
   headerTitle: {

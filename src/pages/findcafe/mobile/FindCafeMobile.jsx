@@ -416,7 +416,7 @@ const styles = {
     height: "100%",
   },
 
-  // ✅ 내 위치 버튼
+  // 내 위치 버튼
   myLocBtn: {
     position: "absolute",
     top: 10,
@@ -449,21 +449,21 @@ const styles = {
     display: "inline-block",
   },
 
-  // ✅ 드롭다운 (오른쪽 이미지처럼: 선택 후 pill만 남음)
+  //  드롭다운 (거리 선택 버튼)
   overlay: {
     position: "absolute",
     top: 10,
     left: 10,
     zIndex: 100000,
     pointerEvents: "auto",
-    width: 160,
+    width: 140,
   },
   dropBtn: {
     width: "100%",
-    height: 42,
+    height: 38,
     background: "#fff",
     border: "2px solid rgba(132, 222, 238, 0.8)",
-    borderRadius: 18,
+    borderRadius: 16,
     padding: "0 18px",
     display: "flex",
     alignItems: "center",
@@ -475,7 +475,7 @@ const styles = {
     border: "2px solid rgba(132, 222, 238, 1)",
   },
   dropLeft: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: 900,
     color: "#222",
   },
@@ -483,7 +483,7 @@ const styles = {
     display: "inline-flex",
     alignItems: "center",
     gap: 8,
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: 900,
     color: "#666",
   },
@@ -498,7 +498,7 @@ const styles = {
 
   menu: {
     position: "absolute",
-    top: 46,
+    top: 40,
     left: 0,
     width: "100%",
     background: "#fff",
@@ -508,11 +508,11 @@ const styles = {
   },
   menuItem: {
     width: "100%",
-    height: 64,
+    height: 40,
     border: "none",
     background: "#fff",
     fontWeight: 900,
-    fontSize: 14,
+    fontSize: 12,
     cursor: "pointer",
     textAlign: "left",
     padding: "0 16px",

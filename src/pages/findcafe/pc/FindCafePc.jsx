@@ -20,7 +20,7 @@ function MapLayout() {
   const [distanceKm, setDistanceKm] = useState(1.0);
   const [places, setPlaces] = useState([]);
 
-  // ✅ 내 위치 모드(버튼 활성화 여부) - 버튼 누르면 ON, 다시 누르면 OFF
+  //  내 위치 모드(버튼 활성화 여부) - 버튼 누르면 ON, 다시 누르면 OFF
   const [isMyLocationMode, setIsMyLocationMode] = useState(false);
 
   // 드롭다운 상태
@@ -40,7 +40,7 @@ function MapLayout() {
   const myLocationRef = useRef(null);
 
   // 초기 중심 좌표(현위치 실패 시 fallback)
-  const centerRef = useRef({ lat: 37.5563, lng: 126.922 });
+  const centerRef = useRef({ lat: 37.5506, lng: 126.9258 });
 
   const selectedLabel =
     distanceOptions.find((o) => o.km === distanceKm)?.label ?? `${distanceKm}km`;
