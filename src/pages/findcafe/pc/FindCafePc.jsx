@@ -1,6 +1,7 @@
 // src/pages/findcafe/pc/FindCafePc.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import myLocationIcon from "../../../icon/location.png";
+import myLocationIcon from "../../../icon/my_location.png";
+import cafeMarkerIcon from "../../../icon/location.png";
 
 export default function FindCafePc() {
   return <MapLayout />;
@@ -20,6 +21,9 @@ function MapLayout() {
   const [distanceKm, setDistanceKm] = useState(1.0);
   const [places, setPlaces] = useState([]);
 
+  //  오른쪽 패널 상세보기 상태 (null이면 목록)
+  const [selectedPlace, setSelectedPlace] = useState(null);
+
   //  내 위치 모드(버튼 활성화 여부) - 버튼 누르면 ON, 다시 누르면 OFF
   const [isMyLocationMode, setIsMyLocationMode] = useState(false);
 
@@ -33,10 +37,10 @@ function MapLayout() {
   const markersRef = useRef([]);
   const circleRef = useRef(null);
 
-  // ✅ 내 위치 마커 ref
+  //  내 위치 마커 ref
   const myMarkerRef = useRef(null);
 
-  // ✅ 실제 “내 위치 좌표” 저장 (내 위치 모드 ON일 때만 사용)
+  // 실제 “내 위치 좌표” 저장 (내 위치 모드 ON일 때만 사용)
   const myLocationRef = useRef(null);
 
   // 초기 중심 좌표(현위치 실패 시 fallback)
@@ -144,18 +148,16 @@ function MapLayout() {
       });
       mapRef.current = map;
 
-      // ✅ 시작은 내 위치 모드 OFF (모바일 요구사항과 동일)
-      // 내 위치 마커는 찍지 않음
-      drawRadiusCircle(distanceKm); // 내부에서 OFF면 숨김 처리
+     
+      drawRadiusCircle(distanceKm);
       searchCafes(distanceKm);
 
-      // ✅ 지도 이동/확대축소 후
+     
       kakao.maps.event.addListener(map, "idle", () => {
         const c = map.getCenter();
         const newCenter = { lat: c.getLat(), lng: c.getLng() };
         centerRef.current = newCenter;
 
-        // ✅ 내 위치 모드 ON 상태에서만: 중심이 내 위치에서 멀어지면 OFF
         const my = myLocationRef.current;
         if (isMyLocationMode && my) {
           const dist = haversineMeters(my.lat, my.lng, newCenter.lat, newCenter.lng);
@@ -174,14 +176,13 @@ function MapLayout() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ 내 위치 모드 OFF되면: 내 위치/원/마커 제거
+
   useEffect(() => {
     if (!isMyLocationMode) {
       myLocationRef.current = null;
       clearMyLocationMarker();
       clearCircle();
     } else {
-      // ON일 때는 현재 상태 기준으로 원 다시 그림(내 위치 클릭 직후 안전)
       drawRadiusCircle(distanceKm);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -200,13 +201,12 @@ function MapLayout() {
     markersRef.current = [];
   }
 
-  // ✅ 내 위치 OFF일 때 원 숨김
+  // 내 위치 OFF일 때 원 숨김
   function drawRadiusCircle(km) {
     const kakao = window.kakao;
     const map = mapRef.current;
     if (!kakao?.maps || !map) return;
 
-    // OFF면 원 제거하고 끝
     if (!isMyLocationMode) {
       clearCircle();
       return;
@@ -278,9 +278,22 @@ function MapLayout() {
           .sort((a, b) => a.distM - b.distM);
 
         nextPlaces.forEach((p) => {
+          const imageSize = new kakao.maps.Size(36, 44); // 핀 비율에 맞춤
+          const imageOption = {
+            offset: new kakao.maps.Point(18, 44), // 핀 끝이 좌표
+          };
+
+          const markerImage = new kakao.maps.MarkerImage(
+            cafeMarkerIcon,
+            imageSize,
+            imageOption
+          );
           const marker = new kakao.maps.Marker({
             position: new kakao.maps.LatLng(p.lat, p.lng),
-          });
+            image: markerImage,
+            zIndex: 100,
+        });
+
           marker.setMap(map);
 
           const iw = new kakao.maps.InfoWindow({
@@ -315,22 +328,18 @@ function MapLayout() {
     const kakao = window.kakao;
     const map = mapRef.current;
 
-    // ✅ ON 상태에서 다시 누르면 OFF(해제)
     if (isMyLocationMode) {
       setIsMyLocationMode(false);
 
-      // 해제 시 현재 지도 중심 기준 유지
       if (map) {
         const c = map.getCenter();
         centerRef.current = { lat: c.getLat(), lng: c.getLng() };
       }
 
-      // 원/내마커 제거는 useEffect에서 처리됨
       searchCafes(distanceKm);
       return;
     }
 
-    // ✅ OFF 상태면 내 위치로 이동(켜기)
     try {
       const my = await getMyLocation();
 
@@ -343,7 +352,7 @@ function MapLayout() {
       map.panTo(myLatLng);
 
       drawMyLocationMarker(my.lat, my.lng);
-      setIsMyLocationMode(true); // ✅ ON
+      setIsMyLocationMode(true);
 
       drawRadiusCircle(distanceKm);
       searchCafes(distanceKm);
@@ -357,7 +366,7 @@ function MapLayout() {
       <main style={styles.main}>
         <div ref={mapContainerRef} style={styles.mapWrap} />
 
-        {/* ✅ 내 위치 버튼: 토글 + OFF면 점 비활성화 */}
+        {/* ✅ 내 위치 버튼 */}
         <button
           type="button"
           style={{
@@ -412,14 +421,32 @@ function MapLayout() {
         </div>
       </main>
 
+      {/* ✅ 오른쪽 패널: 목록 / 상세 뷰 전환 */}
       <aside style={styles.rightPanel}>
-        <RightPanel places={places} onCenterTo={handleCenterTo} />
+        {selectedPlace ? (
+          <PlaceDetailPanel
+            place={selectedPlace}
+            onBack={() => setSelectedPlace(null)}
+            onCenterTo={() => handleCenterTo(selectedPlace)}
+          />
+        ) : (
+          <RightPanel
+            places={places}
+            onCenterTo={handleCenterTo}
+            onOpenDetail={(p) => {
+              setSelectedPlace(p);
+              handleCenterTo(p);
+            }}
+          />
+        )}
       </aside>
     </div>
   );
 }
 
-function RightPanel({ places, onCenterTo }) {
+/* -------------------- Right Panel (List) -------------------- */
+
+function RightPanel({ places, onCenterTo, onOpenDetail }) {
   return (
     <div style={styles.rightInner}>
       {places.length === 0 ? (
@@ -438,6 +465,10 @@ function RightPanel({ places, onCenterTo }) {
               </div>
 
               <div style={styles.cardActions}>
+                <button type="button" style={styles.starBtn} title="즐겨찾기(미구현)">
+                  ☆
+                </button>
+
                 <button
                   type="button"
                   style={styles.routeBtn}
@@ -445,20 +476,71 @@ function RightPanel({ places, onCenterTo }) {
                 >
                   길찾기
                 </button>
-                <button type="button" style={styles.starBtn} title="즐겨찾기(미구현)">
-                  ☆
+
+                <button
+                  type="button"
+                  style={styles.detailBtn}
+                  onClick={() => onOpenDetail(p)}
+                >
+                  상세보기
                 </button>
               </div>
-            </div>
-
-            <div style={styles.cardLinkRow}>
-              <a href={p.url} target="_blank" rel="noreferrer" style={styles.link}>
-                상세보기
-              </a>
             </div>
           </div>
         ))
       )}
+    </div>
+  );
+}
+
+/* -------------------- Right Panel (Detail) -------------------- */
+
+function PlaceDetailPanel({ place, onBack, onCenterTo }) {
+  return (
+    <div style={styles.detailPanel}>
+      {/* 상단 바 */}
+      <div style={styles.detailTopBar}>
+        <button type="button" onClick={onBack} style={styles.backBtn} aria-label="뒤로가기">
+          ←
+        </button>
+
+        <div style={styles.detailTopTitleRow}>
+          <div style={styles.detailTitle}>{place.name}</div>
+          <button type="button" style={styles.detailStar} title="즐겨찾기(미구현)">
+            ☆
+          </button>
+        </div>
+
+        <button type="button" style={styles.routeBtn} onClick={onCenterTo}>
+          길찾기
+        </button>
+      </div>
+
+      {/* 메타 */}
+      <div style={styles.detailMetaRow2}>
+        <div style={styles.detailMetaItem2}>거리 {formatDistance(place.distM)}</div>
+        <div style={styles.detailMetaItem2}>소요시간 2분</div>
+      </div>
+
+      {/* 사진 */}
+      <div style={styles.detailPhotos2}>
+        <div style={styles.detailPhotoBox2}>카페사진1</div>
+        <div style={styles.detailPhotoBox2}>카페사진2</div>
+      </div>
+
+      {/* 정보 */}
+      <div style={styles.detailInfo2}>
+        <div style={styles.detailInfoRow2}>영업시간 00:00 - 00:00</div>
+        <div style={styles.detailInfoRow2}>주소 00시 00구 00길 00 0층</div>
+        <div style={styles.detailInfoRow2}>리뷰 0,000개</div>
+      </div>
+
+      {/* 방문자 리뷰 입력 */}
+      <div style={styles.detailReviewList2}>
+        {Array.from({ length: 8 }).map((_, i) => (
+          <input key={i} style={styles.detailReviewInput2} placeholder="방문자 리뷰" />
+        ))}
+      </div>
     </div>
   );
 }
@@ -549,7 +631,6 @@ const styles = {
     borderRadius: 999,
     display: "inline-block",
   },
-  // ✅ ON / OFF
   myLocDotOn: {
     background: "#618DFF",
     boxShadow: "0 0 0 3px rgba(97,141,255,0.20)",
@@ -616,7 +697,9 @@ const styles = {
   rightPanel: {
     borderLeft: "1px solid #eee",
     background: "#fff",
+    minHeight: 0,
   },
+
   rightInner: {
     height: "100%",
     overflowY: "auto",
@@ -625,6 +708,7 @@ const styles = {
     flexDirection: "column",
     gap: 12,
   },
+
   emptyBox: {
     padding: 14,
     border: "1px solid #eee",
@@ -648,7 +732,7 @@ const styles = {
   },
   thumbnail: {
     width: 80,
-    height: 72,
+    height: 80,
     borderRadius: 10,
     border: "1px solid #eee",
     background: "#fafafa",
@@ -658,7 +742,14 @@ const styles = {
     fontSize: 12,
     color: "#aaa",
   },
-  cardBody: { minWidth: 0 },
+
+  cardBody: {
+    minWidth: 0,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    textAlign: "left",
+  },
   cardTitle: {
     fontSize: 14,
     fontWeight: 800,
@@ -667,6 +758,7 @@ const styles = {
     whiteSpace: "nowrap",
     overflow: "hidden",
     textOverflow: "ellipsis",
+    maxWidth: "100%",
   },
   cardMeta: { fontSize: 12, color: "#666", lineHeight: 1.5 },
 
@@ -676,6 +768,7 @@ const styles = {
     alignItems: "flex-end",
     gap: 8,
   },
+
   routeBtn: {
     border: "none",
     background: PINK,
@@ -686,22 +779,144 @@ const styles = {
     borderRadius: 18,
     cursor: "pointer",
   },
+
   starBtn: {
+    border: "none",
+    background: "transparent",
+    color: PINK,
+    cursor: "pointer",
+    fontSize: 22,
+    lineHeight: 1,
+    padding: 0,
+  },
+
+  detailBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    textDecoration: "none",
     border: `1px solid ${PINK}`,
     background: "#fff",
     color: PINK,
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+    fontWeight: 800,
+    fontSize: 12,
+    padding: "8px 10px",
+    borderRadius: 18,
     cursor: "pointer",
-    fontSize: 16,
-    lineHeight: "32px",
   },
 
-  cardLinkRow: {
-    marginTop: 8,
-    display: "flex",
-    justifyContent: "flex-end",
+  /* ---------- Detail Panel ---------- */
+
+  detailPanel: {
+    height: "100%",
+    overflowY: "auto",
+    padding: 12,
   },
-  link: { fontSize: 12, color: "#888", textDecoration: "none" },
+
+  detailTopBar: {
+    display: "grid",
+    gridTemplateColumns: "40px 1fr auto",
+    alignItems: "center",
+    gap: 10,
+    padding: "10px 8px",
+    border: "1px solid #eee",
+    borderRadius: 14,
+    background: "#fff",
+  },
+
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    border: "none",
+    background: "rgba(0,0,0,0.05)",
+    cursor: "pointer",
+    fontSize: 18,
+  },
+
+  detailTopTitleRow: {
+    minWidth: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+
+  detailTitle: {
+    minWidth: 0,
+    fontSize: 18,
+    fontWeight: 900,
+    color: "#222",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
+
+  detailStar: {
+    border: "none",
+    background: "transparent",
+    color: PINK,
+    cursor: "pointer",
+    fontSize: 22,
+    lineHeight: 1,
+  },
+
+  detailMetaRow2: {
+    marginTop: 12,
+    display: "flex",
+    gap: 10,
+    color: "#7A7A7A",
+    fontWeight: 800,
+    fontSize: 12,
+    padding: "0 6px",
+  },
+  detailMetaItem2: {
+    padding: "6px 10px",
+    borderRadius: 999,
+    border: "1px solid #eee",
+    background: "#fff",
+  },
+
+  detailPhotos2: {
+    marginTop: 12,
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 10,
+    padding: "0 6px",
+  },
+  detailPhotoBox2: {
+    height: 120,
+    borderRadius: 14,
+    background: "#D9D9D9",
+    color: "#fff",
+    fontWeight: 900,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  detailInfo2: {
+    marginTop: 12,
+    padding: "0 6px",
+    color: "#7A7A7A",
+    fontWeight: 700,
+    fontSize: 13,
+  },
+  detailInfoRow2: { marginTop: 6 },
+
+  detailReviewList2: {
+    marginTop: 12,
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+    padding: "0 6px 18px",
+  },
+  detailReviewInput2: {
+    height: 42,
+    borderRadius: 12,
+    border: "1px solid #E6E6E6",
+    padding: "0 12px",
+    outline: "none",
+    fontSize: 13,
+  },
 };

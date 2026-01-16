@@ -19,7 +19,11 @@ export default function SidebarMobile() {
           {({ isActive }) => (
             <>
               <img
-                className="mnavIcon"
+                className={
+                  it.key === "star"
+                    ? "mnavIcon mnavIconStar" //  즐겨찾기만 따로 관리
+                    : "mnavIcon"
+                }
                 src={isActive ? icons[it.key].blue : icons[it.key].gray}
                 alt=""
                 aria-hidden="true"
@@ -32,3 +36,5 @@ export default function SidebarMobile() {
     </nav>
   );
 }
+
+

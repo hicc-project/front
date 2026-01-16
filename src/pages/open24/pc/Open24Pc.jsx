@@ -202,8 +202,8 @@ const PINK_DARK = "#8acfdbff";
 const styles = {
   page: {
     width: "92vw",
-    height: "100%",          // ✅ 100vh → 100% (Layout이 높이 잡음)
-    minHeight: 0,            // ✅ flex 자식 스크롤 필수
+    height: "100%",          //  100vh → 100% (Layout이 높이 잡음)
+    minHeight: 0,            //  flex 자식 스크롤 필수
     overflow: "hidden",
     background: "#fff",
     display: "flex",
@@ -212,7 +212,7 @@ const styles = {
 
   hero: {
     height: 260,
-    flexShrink: 0,           // ✅ 위 영역이 줄어들지 않게
+    flexShrink: 0,           //  위 영역이 줄어들지 않게
     background:
       "linear-gradient(180deg, #68D0E4 0%, #caebf1ff 60%, #FFFFFF 100%)",
     display: "flex",
@@ -236,14 +236,13 @@ const styles = {
 
   content: {
     flex: 1,
-    minHeight: 0,            // ✅ 여기 필수!
     overflow: "hidden",
     padding: "18px 22px 22px 22px",
   },
 
   grid: {
     height: "100%",
-    minHeight: 0,            // ✅ grid 안에서 스크롤 자식 쓰려면 안전하게
+    minHeight: 0,            
     display: "grid",
     gridTemplateColumns: "1.1fr 1fr",
     gap: 24,
@@ -268,6 +267,8 @@ const styles = {
     flexDirection: "column",
     gap: 14,
     boxShadow: "0 10px 24px rgba(0,0,0,0.04)",
+    flex: 1,
+    minHeight: 0,
   },
 
   nearestTopRow: { display: "flex", flexDirection: "column", gap: 10 },
@@ -316,6 +317,7 @@ const styles = {
     flexDirection: "column",
     gap: 4,
     alignItems: "flex-end",
+    
   },
   metaText: { fontSize: 13, color: "#7A7A7A", fontWeight: 600 },
 
@@ -324,9 +326,12 @@ const styles = {
     gridTemplateColumns: "1fr 1fr 1fr",
     gap: 12,
     marginTop: 4,
+    flex: 1,
+    minHeight: 0,
   },
   photoTile: {
-    height: 170,
+    height: "100%",
+    minHeight: 170,
     borderRadius: 14,
     border: "none",
     background: "#D9D9D9",
@@ -342,14 +347,14 @@ const styles = {
 
   right: {
     minWidth: 0,
-    minHeight: 0,            // ✅ 여기 필수!
+    minHeight: 0,           
     display: "flex",
     flexDirection: "column",
   },
 
   listWrap: {
-    flex: 1,                 // ✅ 남는 높이 전부 사용
-    minHeight: 0,            // ✅ overflowY 작동 필수
+    flex: 1,                 
+    minHeight: 0,            
     overflowY: "auto",
     paddingRight: 6,
     display: "flex",
@@ -383,7 +388,14 @@ const styles = {
   },
   thumbText: { fontSize: 12, color: "#D1D1D1", fontWeight: 800 },
 
-  rowBody: { minWidth: 0, display: "flex", flexDirection: "column", gap: 6 },
+  rowBody: { 
+    minWidth: 0, 
+    display: "flex", 
+    flexDirection: "column", 
+    gap: 6,
+    alignItems: "flex-start", 
+    textAlign: "left", 
+  },
   rowName: { fontSize: 18, fontWeight: 800, color: "#4A4A4A" },
   rowMeta: { fontSize: 13, color: "#7A7A7A", fontWeight: 600 },
 

@@ -263,7 +263,13 @@ const styles = {
   leftBlock: { display: "flex", alignItems: "center", gap: 14, minWidth: 0 },
   rowStar: { fontSize: 22, color: PINK, width: 26, textAlign: "center" },
 
-  info: { minWidth: 0 },
+  info: { 
+    minWidth: 0,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    textAlign: "left",
+  },
   name: { fontSize: 16, fontWeight: 800, color: TEXT },
   meta: { marginTop: 4, fontSize: 12, color: SUB, fontWeight: 600 },
 

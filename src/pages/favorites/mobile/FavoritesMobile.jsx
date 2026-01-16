@@ -121,7 +121,7 @@ function MobileRow({ cafe, onMemoChange }) {
       <div style={styles.rowTop}>
         <div style={styles.left}>
           <span style={styles.rowStar}>★</span>
-          <div>
+          <div style ={styles.rowBody}>
             <div style={styles.name}>{cafe.name}</div>
             <div style={styles.meta}>영업시간 {cafe.hours}</div>
             <div style={styles.meta}>리뷰 {cafe.reviews}</div>
@@ -291,4 +291,11 @@ const styles = {
     borderRight: "8px solid transparent",
     borderBottom: `8px solid ${PINK}`,
   },
+  rowBody: {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "flex-start",   
+  textAlign: "left",          
+  gap: 2,
+ }
 };

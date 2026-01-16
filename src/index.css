@@ -154,7 +154,7 @@ body {
   margin-top: 18px;
   display: grid;
   grid-template-columns: 1fr 1.2fr;
-  gap: 18px;
+  gap: 28px;
 }
 
 .panel {
@@ -194,6 +194,14 @@ body {
   padding: 10px 10px;
   border-radius: 14px;
   border: 1px solid #f0f0f6;
+}
+
+.listText {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  gap: 4px; /* 👍 이름/영업시간 간격 */
 }
 
 .badge {
@@ -329,8 +337,8 @@ body {
   right: 0;
   bottom: 0;
 
-  height: 78px;
-  padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); /* iOS 하단 안전영역 */
+  height: 76px;
+  padding: 6px 12px calc(6px + env(safe-area-inset-bottom)); /* iOS 하단 안전영역 */
   background: #ffffff;
 
   display: grid;
@@ -347,21 +355,26 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap:4px;
   color: #9a9a9a;
   font-weight: 800;
   font-size: 12px;
-  margin-bottom: 4px;
+  margin-bottom: 0px;
 }
 
 /* 아이콘 */
 .mnavIcon {
-  width: 40px;
-  height: 40px;
+  width: 50px;
+  height: 50px;
   object-fit: contain;
   opacity: 0.55; /* 비활성 회색 느낌 */
 }
 
+.mnavIconStar {
+  width: 30px;        
+  height: 50px;
+  transform: translateY(-1px); /* 세로 미세 조정 */
+}
 /* 라벨 */
 .mnavLabel {
   line-height: 1;

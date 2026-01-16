@@ -266,6 +266,14 @@ const styles = {
     gap: 12,
     alignItems: "center",
   },
+  newText: {
+    minWidth: 0,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    textAlign: "left",
+  },
+
   kmPill: {
     height: 44,
     borderRadius: 14,

@@ -148,17 +148,19 @@ function CafeCard({ cafe, isFav, onToggleFav }) {
         </div>
 
         <div style={styles.cardBody}>
+          {/* ✅ 우측 상단 별 */}
+          <button
+            type="button"
+            onClick={onToggleFav}
+            aria-label="즐겨찾기"
+            style={{ ...styles.rowFav, ...(isFav ? styles.rowFavActive : null) }}
+            title="즐겨찾기"
+          >
+            {isFav ? "★" : "☆"}
+          </button>
+
           <div style={styles.cardTitleRow}>
             <div style={styles.cardName}>{cafe.name}</div>
-            <button
-              type="button"
-              onClick={onToggleFav}
-              aria-label="즐겨찾기"
-              style={{ ...styles.rowFav, ...(isFav ? styles.rowFavActive : null) }}
-              title="즐겨찾기"
-            >
-              {isFav ? "★" : "☆"}
-            </button>
           </div>
 
           <div style={styles.cardMeta}>거리 {(cafe.distanceKm ?? 0).toFixed(1)} km</div>
@@ -286,6 +288,8 @@ const styles = {
     display: "flex",
     flexDirection: "column",
     gap: 4,
+    alignItems: "flex-start",
+    textAlign: "left",
   },
 
   ratingRow: { display: "flex", alignItems: "center", gap: 8 },
@@ -328,6 +332,7 @@ const styles = {
   },
 
   card: {
+    position: "relative",
     borderRadius: 16,
     border: "1px solid #EAEAEA",
     background: "#fff",
@@ -343,7 +348,7 @@ const styles = {
 
   thumbBox: {
     width: 88,
-    height: 72,
+    height: 88,
     borderRadius: 14,
     border: `1px solid ${LINE}`,
     background: "#fff",
@@ -353,7 +358,15 @@ const styles = {
   },
   thumbText: { fontSize: 12, color: "#D1D1D1", fontWeight: 900 },
 
-  cardBody: { minWidth: 0, display: "flex", flexDirection: "column", gap: 6 },
+  cardBody: {
+    minWidth: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+    alignItems: "flex-start", 
+    textAlign: "left",        
+  },
+
 
   cardTitleRow: {
     display: "flex",
@@ -361,11 +374,14 @@ const styles = {
     justifyContent: "space-between",
     gap: 10,
   },
-  cardName: { fontSize: 16, fontWeight: 900, color: TEXT },
+  cardName: { fontSize: 16, fontWeight: 900, color: TEXT, paddingRight: 44 },
 
   cardMeta: { fontSize: 12, color: SUB, fontWeight: 700 },
 
   rowFav: {
+    position: "absolute",
+    top: 10,
+    right: 10,
     width: 34,
     height: 34,
     borderRadius: 12,
