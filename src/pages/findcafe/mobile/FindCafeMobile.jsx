@@ -1,9 +1,16 @@
 // src/pages/findcafe/mobile/FindCafeMobile.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import myLocationIcon from "../../../icon/my_location.png";
-
-// ✅ 카페 마커(핀) 이미지
 import cafeMarkerIcon from "../../../icon/location.png";
+
+import {
+  collectPlacesByBrowser,
+  fetchPlaces,
+  openKakaoRouteToPlace,
+  collectDetails,
+  refreshStatus,
+  fetchOpenStatusLogs,
+} from "../../../utils/cafeApi";
 
 export default function FindCafeMobile() {
   const distanceOptions = useMemo(
@@ -20,92 +27,33 @@ export default function FindCafeMobile() {
   const [places, setPlaces] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
 
-  // ✅ 상세보기 상태 (null이면 목록, 있으면 상세)
   const [selectedPlace, setSelectedPlace] = useState(null);
-
-  //  내 위치 모드 (ON일 때만 파란점/내마커/원 표시)
   const [isMyLocationMode, setIsMyLocationMode] = useState(false);
 
   const dropdownRef = useRef(null);
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
+
   const markersRef = useRef([]);
   const circleRef = useRef(null);
   const myMarkerRef = useRef(null);
+  const ignoreNextIdleRef = useRef(false);
 
-  // 현재 검색 중심(지도 중심)
-  const centerRef = useRef({ lat: 37.5506, lng: 126.9258 }); // fallback 홍대
-  // 실제 내 위치(내 위치 모드 ON일 때만 값 존재)
   const myLocationRef = useRef(null);
+  const centerRef = useRef({ lat: 37.5506, lng: 126.9258 });
 
   const selectedLabel =
     distanceOptions.find((o) => o.km === distanceKm)?.label ?? `${distanceKm}km`;
 
-  /* ---------------- utils ---------------- */
-  function getMyLocation() {
-    return new Promise((resolve, reject) => {
-      if (!navigator.geolocation) {
-        reject(new Error("GEO_NOT_SUPPORTED"));
-        return;
-      }
-      navigator.geolocation.getCurrentPosition(
-        (pos) =>
-          resolve({
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-          }),
-        reject,
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-      );
-    });
-  }
-
-  function haversine(lat1, lng1, lat2, lng2) {
-    const R = 6371000;
-    const toRad = (d) => (d * Math.PI) / 180;
-    const dLat = toRad(lat2 - lat1);
-    const dLng = toRad(lng2 - lng1);
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos(toRad(lat1)) *
-        Math.cos(toRad(lat2)) *
-        Math.sin(dLng / 2) ** 2;
-    return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
-  }
-
-  function formatDistance(m) {
-    if (m >= 1000) return `${(m / 1000).toFixed(1)}km`;
-    return `${m}m`;
-  }
-
-  function escapeForUrl(s) {
-    return encodeURIComponent(String(s || "").trim());
-  }
-
-  // ✅ 카카오맵 길찾기 URL (내 위치 -> 카페)
-  //  - start 좌표를 알면 ?sName&sX&sY&eName&eX&eY 로 정확히 가능
-  //  - start 좌표를 못 얻으면 link/to 로 fallback (카카오에서 현재 위치 기반 길찾기로 이어지는 경우가 많음)
-  async function openKakaoRouteTo(place) {
-    try {
-      const my = myLocationRef.current ?? (await getMyLocation());
-
-      const url =
-        `https://map.kakao.com/?` +
-        `sName=${escapeForUrl("내 위치")}` +
-        `&sX=${my.lng}&sY=${my.lat}` +
-        `&eName=${escapeForUrl(place.name)}` +
-        `&eX=${place.lng}&eY=${place.lat}`;
-
-      window.open(url, "_blank", "noopener,noreferrer");
-    } catch (e) {
-      const fallback = `https://map.kakao.com/link/to/${escapeForUrl(
-        place.name
-      )},${place.lat},${place.lng}`;
-      window.open(fallback, "_blank", "noopener,noreferrer");
-    }
-  }
+  // ----- open_status_logs 캐시 (모바일 워밍업용) -----
+  const statusMapRef = useRef(new Map()); // kakao_id -> status
+  const statusUpdatedAtRef = useRef(0);
+  const warmupRunningRef = useRef(false);
+  const [statusVersion, setStatusVersion] = useState(0);
+  const STATUS_TTL_MS = 30 * 1000;
 
   /* ---------------- 지도 helpers ---------------- */
+
   function clearMarkers() {
     markersRef.current.forEach((m) => m.setMap(null));
     markersRef.current = [];
@@ -132,9 +80,8 @@ export default function FindCafeMobile() {
 
     clearMyLocationMarker();
 
-    // ✅ 원형 아이콘(중앙 기준)
     const imageSize = new kakao.maps.Size(34, 34);
-    const imageOption = { offset: new kakao.maps.Point(17, 17) };
+    const imageOption = { offset: new kakao.maps.Point(17, 34) };
 
     const markerImage = new kakao.maps.MarkerImage(
       myLocationIcon,
@@ -151,7 +98,6 @@ export default function FindCafeMobile() {
     myMarkerRef.current.setMap(map);
   }
 
-  // ✅ 내 위치 OFF이면 원을 숨김(그리지 않음)
   function drawCircle(km) {
     const kakao = window.kakao;
     const map = mapRef.current;
@@ -177,87 +123,136 @@ export default function FindCafeMobile() {
     circleRef.current.setMap(map);
   }
 
-  // ✅ 카페 검색 + 커스텀(핀) 마커로 표시
-  function search(km) {
-    const kakao = window.kakao;
-    const map = mapRef.current;
-    if (!kakao?.maps?.services || !map) return;
-
-    const ps = new kakao.maps.services.Places();
-    const center = new kakao.maps.LatLng(
-      centerRef.current.lat,
-      centerRef.current.lng
-    );
-
-    ps.categorySearch(
-      "CE7",
-      (data, status) => {
-        if (status !== kakao.maps.services.Status.OK) {
-          setPlaces([]);
-          clearMarkers();
-          return;
-        }
-
-        clearMarkers();
-
-        const list = data
-          .map((p) => {
-            const dist = haversine(
-              centerRef.current.lat,
-              centerRef.current.lng,
-              Number(p.y),
-              Number(p.x)
-            );
-
-            return {
-              id: p.id,
-              name: p.place_name,
-              lat: Number(p.y),
-              lng: Number(p.x),
-              url: p.place_url,
-              dist,
-            };
-          })
-          .sort((a, b) => a.dist - b.dist);
-
-        // ✅ 카페 핀 마커 이미지
-        const imageSize = new kakao.maps.Size(36, 44);
-        const imageOption = { offset: new kakao.maps.Point(18, 44) };
-        const markerImage = new kakao.maps.MarkerImage(
-          cafeMarkerIcon,
-          imageSize,
-          imageOption
-        );
-
-        list.forEach((p) => {
-          const m = new kakao.maps.Marker({
-            position: new kakao.maps.LatLng(p.lat, p.lng),
-            image: markerImage,
-            zIndex: 100,
-          });
-
-          m.setMap(map);
-          markersRef.current.push(m);
-        });
-
-        setPlaces(list);
-
-        // ✅ 상세 화면에서 “선택된 카페”가 목록에 없어지는 상황 대비
-        // (검색 반경 바뀌면 상세 닫기)
-        if (selectedPlace) {
-          const stillExists = list.some((x) => x.id === selectedPlace.id);
-          if (!stillExists) setSelectedPlace(null);
-        }
-      },
-      { location: center, radius: Math.round(km * 1000) }
-    );
-  }
-
   function panToPlace(place) {
     const kakao = window.kakao;
     const map = mapRef.current;
     if (!kakao?.maps || !map) return;
+
+    ignoreNextIdleRef.current = true;
     map.panTo(new kakao.maps.LatLng(place.lat, place.lng));
+  }
+
+  function drawCafeMarkers(list) {
+    const kakao = window.kakao;
+    const map = mapRef.current;
+    if (!kakao?.maps || !map) return;
+
+    clearMarkers();
+
+    const imageSize = new kakao.maps.Size(36, 44);
+    const imageOption = { offset: new kakao.maps.Point(18, 44) };
+    const markerImage = new kakao.maps.MarkerImage(
+      cafeMarkerIcon,
+      imageSize,
+      imageOption
+    );
+
+    list.forEach((p) => {
+      const marker = new kakao.maps.Marker({
+        position: new kakao.maps.LatLng(p.lat, p.lng),
+        image: markerImage,
+        zIndex: 100,
+      });
+
+      kakao.maps.event.addListener(marker, "click", () => {
+        setSelectedPlace(p);
+        panToPlace(p);
+      });
+
+      marker.setMap(map);
+      markersRef.current.push(marker);
+    });
+  }
+
+  /* ---------------- 워밍업/캐시 (PC와 동일 개념) ---------------- */
+
+  async function warmupOpenStatusIfNeeded({ force = false } = {}) {
+    if (!isMyLocationMode) return;
+    if (warmupRunningRef.current) return;
+
+    const now = Date.now();
+    const age = now - (statusUpdatedAtRef.current || 0);
+    if (!force && age < STATUS_TTL_MS) return;
+
+    warmupRunningRef.current = true;
+    try {
+      await collectDetails({}).catch(() => {});
+      await refreshStatus({}).catch(() => {});
+
+      const logs = await fetchOpenStatusLogs().catch(() => []);
+      const list = Array.isArray(logs) ? logs : [];
+
+      const m = new Map();
+      list.forEach((x) => {
+        const key = String(x?.kakao_id ?? "");
+        if (key) m.set(key, x);
+      });
+
+      statusMapRef.current = m;
+      statusUpdatedAtRef.current = Date.now();
+      setStatusVersion((v) => v + 1);
+    } finally {
+      warmupRunningRef.current = false;
+    }
+  }
+
+  function getCachedStatusByKakaoId(kakaoId) {
+    const key = String(kakaoId ?? "");
+    if (!key) return null;
+    return statusMapRef.current.get(key) || null;
+  }
+
+  async function getStatusByKakaoId(kakaoId) {
+    const now = Date.now();
+    const age = now - (statusUpdatedAtRef.current || 0);
+
+    const cached = getCachedStatusByKakaoId(kakaoId);
+    if (cached && age < STATUS_TTL_MS) return cached;
+
+    await warmupOpenStatusIfNeeded({ force: true });
+    return getCachedStatusByKakaoId(kakaoId);
+  }
+
+  /* ---------------- backend sync ---------------- */
+
+  async function loadPlacesFromBackendByBrowser(km) {
+    const radius_m = Math.round(km * 1000);
+
+    const { lat, lng, result } = await collectPlacesByBrowser({ km });
+    console.log("collect 성공:", result);
+
+    const list = await fetchPlaces({ lat, lng, radius_m });
+
+    const normalized = (Array.isArray(list) ? list : []).map((p) => ({
+      id: String(p.kakao_id ?? p.id ?? `${p.lat}-${p.lng}-${p.name}`),
+      kakaoId: String(p.kakao_id ?? p.id ?? ""),
+      name: p.name ?? p.place_name ?? "카페",
+      lat: Number(p.lat),
+      lng: Number(p.lng),
+      address: p.address ?? "",
+      url: p.place_url ?? p.url ?? "",
+      distM: haversineMeters(lat, lng, Number(p.lat), Number(p.lng)),
+    }));
+
+    normalized.sort((a, b) => a.distM - b.distM);
+
+    setPlaces(normalized);
+    drawCafeMarkers(normalized);
+
+    if (mapRef.current && window.kakao?.maps) {
+      mapRef.current.panTo(new window.kakao.maps.LatLng(lat, lng));
+      centerRef.current = { lat, lng };
+      drawMyLocationMarker(lat, lng);
+      drawCircle(km);
+    }
+
+    if (selectedPlace) {
+      const stillExists = normalized.some((x) => x.id === selectedPlace.id);
+      if (!stillExists) setSelectedPlace(null);
+    }
+
+    // 중요: 목록 로드 직후 1회 워밍업
+    warmupOpenStatusIfNeeded({ force: true }).catch(() => {});
   }
 
   /* ---------------- dropdown 외부 클릭 닫기 ---------------- */
@@ -290,27 +285,27 @@ export default function FindCafeMobile() {
       });
       mapRef.current = map;
 
-      // 시작 시: 내 위치 모드 자동 ON 하지 않음
-      drawCircle(distanceKm);
-      search(distanceKm);
+      clearMarkers();
+      clearCircle();
+      clearMyLocationMarker();
+      setPlaces([]);
 
       kakao.maps.event.addListener(map, "idle", () => {
         const c = map.getCenter();
-        centerRef.current = { lat: c.getLat(), lng: c.getLng(), reminder: false };
+        centerRef.current = { lat: c.getLat(), lng: c.getLng() };
 
-        // ✅ 내 위치 모드 ON인데 중심이 내 위치에서 멀어지면 OFF
-        if (isMyLocationMode && myLocationRef.current) {
-          const d = haversine(
-            c.getLat(),
-            c.getLng(),
-            myLocationRef.current.lat,
-            myLocationRef.current.lng
-          );
-          if (d > 80) setIsMyLocationMode(false);
+        if (!isMyLocationMode) return;
+
+        if (ignoreNextIdleRef.current) {
+          ignoreNextIdleRef.current = false;
+          return;
         }
 
-        drawCircle(distanceKm);
-        search(distanceKm);
+        const my = myLocationRef.current;
+        if (my) {
+          const dist = haversineMeters(my.lat, my.lng, c.getLat(), c.getLng());
+          if (dist > 80) setIsMyLocationMode(false);
+        }
       });
     };
 
@@ -319,71 +314,100 @@ export default function FindCafeMobile() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isMyLocationMode]);
 
-  // ✅ 내 위치 모드 OFF되면: 내마커/원 모두 비활성화
+  // 내 위치 모드 ON/OFF
   useEffect(() => {
     if (!isMyLocationMode) {
       myLocationRef.current = null;
       clearMyLocationMarker();
       clearCircle();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMyLocationMode]);
+      clearMarkers();
+      setPlaces([]);
+      setSelectedPlace(null);
 
-  // 거리 바뀌면 재검색(원은 내 위치 모드일 때만)
-  useEffect(() => {
-    if (!mapRef.current || !window.kakao?.maps?.services) return;
-    drawCircle(distanceKm);
-    search(distanceKm);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [distanceKm]);
-
-  /* ---------------- 내 위치 버튼 (토글) ---------------- */
-  async function handleGoMyLocation() {
-    const kakao = window.kakao;
-    const map = mapRef.current;
-
-    // ✅ ON 상태에서 다시 누르면 OFF(해제)
-    if (isMyLocationMode) {
-      setIsMyLocationMode(false);
-
-      // 해제 즉시 현재 지도 중심 기준으로 검색 유지
-      if (map) {
-        const c = map.getCenter();
-        centerRef.current = { lat: c.getLat(), lng: c.getLng() };
-      }
-      search(distanceKm);
+      // 캐시도 비움
+      statusMapRef.current = new Map();
+      statusUpdatedAtRef.current = 0;
+      setStatusVersion((v) => v + 1);
       return;
     }
 
-    // ✅ OFF 상태면 내 위치로 이동(켜기)
+    loadPlacesFromBackendByBrowser(distanceKm).catch((e) => {
+      console.error(e);
+      alert("collect/places 요청에 실패했습니다. 콘솔/네트워크를 확인해주세요.");
+      setIsMyLocationMode(false);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMyLocationMode]);
+
+  // 거리 변경 시 재요청 (내 위치 ON일 때만)
+  useEffect(() => {
+    if (!isMyLocationMode) return;
+
+    loadPlacesFromBackendByBrowser(distanceKm).catch((e) => {
+      console.error(e);
+      alert("거리 변경 후 요청에 실패했습니다.");
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [distanceKm]);
+
+  // (선택) 켜져있는 동안 30초마다 백그라운드 갱신
+  useEffect(() => {
+    if (!isMyLocationMode) return;
+
+    const t = setInterval(() => {
+      warmupOpenStatusIfNeeded({ force: false }).catch(() => {});
+    }, STATUS_TTL_MS);
+
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMyLocationMode]);
+
+  async function handleGoMyLocation() {
+    if (isMyLocationMode) {
+      setIsMyLocationMode(false);
+
+      if (mapRef.current) {
+        const c = mapRef.current.getCenter();
+        centerRef.current = { lat: c.getLat(), lng: c.getLng() };
+      }
+      return;
+    }
+
     try {
-      const my = await getMyLocation();
-
-      myLocationRef.current = my;
-      centerRef.current = my;
+      const { lat, lng } = await getMyLocationFallback();
+      myLocationRef.current = { lat, lng };
+      centerRef.current = { lat, lng };
       setIsMyLocationMode(true);
-
-      if (!kakao?.maps || !map) return;
-
-      map.panTo(new kakao.maps.LatLng(my.lat, my.lng));
-
-      drawMyLocationMarker(my.lat, my.lng);
-      drawCircle(distanceKm);
-      search(distanceKm);
     } catch {
       alert("위치 정보를 가져올 수 없습니다. 브라우저 위치 권한을 확인해주세요.");
     }
   }
 
+  function getMyLocationFallback() {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error("GEO_NOT_SUPPORTED"));
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (pos) =>
+          resolve({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+          }),
+        reject,
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    });
+  }
+
   return (
     <div style={styles.page}>
-      {/* 지도 */}
       <div style={styles.mapArea}>
         <div ref={mapContainerRef} style={styles.map} />
 
-        {/* ✅ 내 위치 버튼 */}
         <button
           type="button"
           style={{
@@ -401,7 +425,6 @@ export default function FindCafeMobile() {
           내 위치
         </button>
 
-        {/* ✅ 거리 드롭다운 */}
         <div style={styles.overlay} ref={dropdownRef}>
           <button
             type="button"
@@ -444,106 +467,209 @@ export default function FindCafeMobile() {
         </div>
       </div>
 
-      {/* ✅ 아래 영역: 목록 / 상세 뷰 전환 */}
       {!selectedPlace ? (
         <div style={styles.list}>
-          {places.map((p) => (
-            <div key={p.id} style={styles.card}>
-              <div style={styles.textBlock}>
-                <div style={styles.name}>{p.name}</div>
-                <div style={styles.meta}>거리 {formatDistance(p.dist)}</div>
-              </div>
+          {!isMyLocationMode ? (
+            <div style={styles.hintBox}>내 위치를 키면 주변 카페가 표시돼요.</div>
+          ) : places.length === 0 ? (
+            <div style={styles.hintBox}>주변 카페를 불러오는 중이거나 결과가 없어요.</div>
+          ) : (
+            places.map((p) => (
+              <div key={p.id} style={styles.card}>
+                <div style={styles.textBlock}>
+                  <div style={styles.name}>{p.name}</div>
+                  <div style={styles.meta}>거리 {formatDistance(p.distM)}</div>
+                </div>
 
-              <div style={styles.actions}>
-                <button
-                  type="button"
-                  style={styles.detailBtn}
-                  onClick={() => {
-                    setSelectedPlace(p);
-                    panToPlace(p);
-                  }}
-                >
-                  상세보기
-                </button>
+                <div style={styles.actions}>
+                  <button
+                    type="button"
+                    style={styles.detailBtn}
+                    onClick={() => {
+                      setSelectedPlace(p);
+                      panToPlace(p);
+                    }}
+                  >
+                    상세보기
+                  </button>
 
-                <button
-                  type="button"
-                  style={styles.routeBtn}
-                  onClick={() => openKakaoRouteTo(p)}
-                >
-                  길찾기
-                </button>
+                  <button
+                    type="button"
+                    style={styles.routeBtn}
+                    onClick={() => openKakaoRouteToPlace(p)}
+                  >
+                    길찾기
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       ) : (
-        <div style={styles.detailWrap}>
-          <div style={styles.detailHeader}>
-            <button
-              type="button"
-              style={styles.backBtn}
-              onClick={() => setSelectedPlace(null)}
-              aria-label="뒤로"
-            >
-              ←
-            </button>
-
-            <div style={styles.detailTitleRow}>
-              <div style={styles.detailTitle}>{selectedPlace.name}</div>
-              <button type="button" style={styles.detailStar} title="즐겨찾기(미구현)">
-                ☆
-              </button>
-            </div>
-
-            <button
-              type="button"
-              style={styles.routeBtn}
-              onClick={() => openKakaoRouteTo(selectedPlace)}
-            >
-              길찾기
-            </button>
-          </div>
-
-          <div style={styles.detailMetaRow}>
-            <div style={styles.detailMetaPill}>거리 {formatDistance(selectedPlace.dist)}</div>
-            <div style={styles.detailMetaPill}>소요시간 2분</div>
-          </div>
-
-          <div style={styles.detailPhotos}>
-            <div style={styles.detailPhoto}>카페사진1</div>
-            <div style={styles.detailPhoto}>카페사진2</div>
-          </div>
-
-          <div style={styles.detailInfo}>
-            <div style={styles.detailInfoRow}>영업시간 00:00 - 00:00</div>
-            <div style={styles.detailInfoRow}>주소 00시 00구 00길 00 0층</div>
-            <div style={styles.detailInfoRow}>리뷰 0,000개</div>
-
-            {selectedPlace.url ? (
-              <a
-                href={selectedPlace.url}
-                target="_blank"
-                rel="noreferrer"
-                style={styles.kakaoLink}
-              >
-                카카오 장소페이지 열기
-              </a>
-            ) : null}
-          </div>
-
-          <div style={styles.reviewList}>
-            {Array.from({ length: 6 }).map((_, i) => (
-              <input key={i} style={styles.reviewInput} placeholder="방문자 리뷰" />
-            ))}
-          </div>
-        </div>
+        <MobileDetailPanel
+          place={selectedPlace}
+          onBack={() => setSelectedPlace(null)}
+          onRoute={() => openKakaoRouteToPlace(selectedPlace)}
+          getStatusByKakaoId={getStatusByKakaoId}
+          getCachedStatusByKakaoId={getCachedStatusByKakaoId}
+          statusVersion={statusVersion}
+        />
       )}
     </div>
   );
 }
 
+function MobileDetailPanel({
+  place,
+  onBack,
+  onRoute,
+  getStatusByKakaoId,
+  getCachedStatusByKakaoId,
+  statusVersion,
+}) {
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState(null);
+  const [error, setError] = useState("");
+
+  // 캐시 갱신되면 현재 place 상태도 즉시 갱신
+  useEffect(() => {
+    const cached = getCachedStatusByKakaoId(place?.kakaoId);
+    if (cached) setStatus(cached);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [place?.kakaoId, statusVersion]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      if (!place?.kakaoId) return;
+
+      setLoading(true);
+      setError("");
+
+      try {
+        const cached = getCachedStatusByKakaoId(place.kakaoId);
+        if (!cancelled && cached) {
+          setStatus(cached);
+          setLoading(false);
+          return;
+        }
+
+        const s = await getStatusByKakaoId(place.kakaoId);
+        if (!cancelled) setStatus(s);
+      } catch (e) {
+        if (!cancelled) setError(e?.message || "상세 정보를 불러오지 못했습니다.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [place?.kakaoId]);
+
+  const isOpenNow = status?.is_open_now;
+  const note = status?.today_status_note ?? null;
+  const openTime = status?.today_open_time ?? null;
+  const closeTime = status?.today_close_time ?? null;
+  const minutesToClose =
+    typeof status?.minutes_to_close === "number" ? status.minutes_to_close : null;
+
+  const remainText =
+    isOpenNow === true && minutesToClose != null
+      ? `${Math.floor(minutesToClose / 60)}시간 ${minutesToClose % 60}분 남음`
+      : null;
+
+  return (
+    <div style={styles.detailWrap}>
+      <div style={styles.detailHeader}>
+        <button type="button" style={styles.backBtn} onClick={onBack} aria-label="뒤로">
+          ←
+        </button>
+
+        <div style={styles.detailTitleRow}>
+          <div style={styles.detailTitle}>{place.name}</div>
+          <button type="button" style={styles.detailStar} title="즐겨찾기(미구현)">
+            ☆
+          </button>
+        </div>
+
+        <button type="button" style={styles.routeBtn} onClick={onRoute}>
+          길찾기
+        </button>
+      </div>
+
+      <div style={styles.detailMetaRow}>
+        <div style={styles.detailMetaPill}>거리 {formatDistance(place.distM)}</div>
+        <div style={styles.detailMetaPill}>
+          {loading ? "영업 정보 불러오는 중..." : error ? "영업 정보 오류" : "영업 정보"}
+        </div>
+      </div>
+
+      <div style={styles.detailPhotos}>
+        <div style={styles.detailPhoto}>카페사진1</div>
+        <div style={styles.detailPhoto}>카페사진2</div>
+      </div>
+
+      <div style={styles.detailInfo}>
+        <div style={styles.detailInfoRow}>주소: {place.address || "주소 정보 없음"}</div>
+
+        <div style={styles.detailInfoRow}>
+          현재 상태:{" "}
+          {loading ? "불러오는 중..." : error ? "불러오지 못함" : isOpenNow === true ? "영업 중" : isOpenNow === false ? "영업 종료" : "정보 없음"}
+        </div>
+
+        <div style={styles.detailInfoRow}>
+          영업시간:{" "}
+          {loading ? "불러오는 중..." : error ? "-" : note ? note : openTime || closeTime ? `${openTime ?? "?"} ~ ${closeTime ?? "?"}` : "정보 없음"}
+        </div>
+
+        <div style={styles.detailInfoRow}>
+          종료까지{" "}
+          {loading ? "불러오는 중..." : error ? "-" : remainText ? remainText : "정보 없음"}
+        </div>
+
+        {place.url ? (
+          <a href={place.url} target="_blank" rel="noreferrer" style={styles.kakaoLink}>
+            카카오 장소페이지 열기
+          </a>
+        ) : null}
+      </div>
+
+      <div style={styles.reviewList}>
+        {Array.from({ length: 6 }).map((_, i) => (
+          <input key={i} style={styles.reviewInput} placeholder="방문자 리뷰" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- utils ---------------- */
+
+function haversineMeters(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
+function formatDistance(m) {
+  if (m >= 1000) return `${(m / 1000).toFixed(1)}km`;
+  return `${m}m`;
+}
+
 /* ---------------- styles ---------------- */
+
 const PINK = "#84DEEE";
 
 const styles = {
@@ -564,7 +690,6 @@ const styles = {
     height: "100%",
   },
 
-  // 내 위치 버튼
   myLocBtn: {
     position: "absolute",
     top: 10,
@@ -597,7 +722,6 @@ const styles = {
     display: "inline-block",
   },
 
-  // 드롭다운 (거리 선택 버튼)
   overlay: {
     position: "absolute",
     top: 10,
@@ -671,11 +795,21 @@ const styles = {
     color: "#fff",
   },
 
-  /* ---- list ---- */
   list: {
     flex: 1,
     overflowY: "auto",
     paddingBottom: 90,
+  },
+
+  hintBox: {
+    margin: 12,
+    padding: 14,
+    borderRadius: 12,
+    border: "1px solid #eee",
+    color: "#666",
+    fontSize: 13,
+    fontWeight: 800,
+    background: "#fff",
   },
 
   card: {
@@ -683,9 +817,11 @@ const styles = {
     borderBottom: "1px solid #eee",
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "center",
-    gap: 12,
+    alignItems: "center   ",
+
   },
+
+
 
   textBlock: {
     minWidth: 0,
@@ -733,7 +869,6 @@ const styles = {
     fontSize: 12,
   },
 
-  /* ---- detail ---- */
   detailWrap: {
     flex: 1,
     overflowY: "auto",

@@ -2,6 +2,88 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import myLocationIcon from "../../../icon/my_location.png";
 import cafeMarkerIcon from "../../../icon/location.png";
+import {
+  collectPlacesByBrowser,
+  fetchPlaces,
+  openKakaoRouteToPlace,
+  collectDetails,
+  refreshStatus,
+  fetchOpenStatusByKakaoId,
+  fetchOpenStatusLogs,
+} from "../../../utils/cafeApi";
+
+/* ---------------------------
+  상세 영업정보 최적화(캐시/쿨다운)
+  - open_status_logs: 30초 캐시
+  - collect_details/refresh_status: 2분 쿨다운(너무 자주 호출 금지)
+---------------------------- */
+const OPEN_LOGS_TTL_MS = 30_000;
+const WARMUP_COOLDOWN_MS = 120_000;
+
+let _openLogsCache = {
+  ts: 0,
+  data: null,
+};
+
+let _lastWarmupAt = 0;
+
+async function getOpenLogsCached({ force = false } = {}) {
+  const now = Date.now();
+  if (!force && _openLogsCache.data && now - _openLogsCache.ts < OPEN_LOGS_TTL_MS) {
+    return _openLogsCache.data;
+  }
+  const logs = await fetchOpenStatusLogs();
+  _openLogsCache = { ts: now, data: logs };
+  return logs;
+}
+
+// collect_details -> refresh_status 트리거를 "가끔만" 하도록
+async function warmupStatusIfNeeded() {
+  const now = Date.now();
+  if (now - _lastWarmupAt < WARMUP_COOLDOWN_MS) return;
+
+  _lastWarmupAt = now;
+
+  // warmup은 실패해도 화면은 뜨게(로그 조회는 계속 시도)
+  await collectDetails({}).catch(() => {});
+  await refreshStatus({}).catch(() => {});
+}
+
+async function getLiveStatusFast(kakaoId) {
+  if (!kakaoId) return null;
+
+  function isUsableStatus(x) {
+    if (!x) return false;
+    // 이 중 하나라도 있으면 "쓸만한 상태"로 판단
+    const hasOpenFlag = x.is_open_now === true || x.is_open_now === false;
+    const hasNote = typeof x.today_status_note === "string" && x.today_status_note.trim() !== "";
+    const hasTimes = !!x.today_open_time || !!x.today_close_time;
+    return hasOpenFlag || hasNote || hasTimes;
+  }
+
+  // 1) 캐시된 logs에서 먼저 찾기
+  const cachedLogs = await getOpenLogsCached({ force: false }).catch(() => null);
+  if (cachedLogs) {
+    const list = Array.isArray(cachedLogs) ? cachedLogs : [];
+    const hit = list.find((x) => String(x.kakao_id) === String(kakaoId)) || null;
+
+    // hit이 있고 내용도 괜찮으면 바로 반환
+    if (isUsableStatus(hit)) return hit;
+
+    // hit이 있지만 null 투성이면 -> warmup 후 fresh로 다시 찾기
+  }
+
+  // 2) warmup (쿨다운 통과 시에만 실제 호출됨)
+  await warmupStatusIfNeeded();
+
+  // 3) fresh logs로 매칭
+  const freshLogs = await getOpenLogsCached({ force: true }).catch(() => null);
+  const list2 = Array.isArray(freshLogs) ? freshLogs : [];
+  const hit2 = list2.find((x) => String(x.kakao_id) === String(kakaoId)) || null;
+
+  return hit2;
+}
+
 
 export default function FindCafePc() {
   return <MapLayout />;
@@ -20,57 +102,25 @@ function MapLayout() {
 
   const [distanceKm, setDistanceKm] = useState(1.0);
   const [places, setPlaces] = useState([]);
-
-  //  오른쪽 패널 상세보기 상태 (null이면 목록)
   const [selectedPlace, setSelectedPlace] = useState(null);
-
-  //  내 위치 모드(버튼 활성화 여부) - 버튼 누르면 ON, 다시 누르면 OFF
   const [isMyLocationMode, setIsMyLocationMode] = useState(false);
 
-  // 드롭다운 상태
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
-  // Kakao Map
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef([]);
   const circleRef = useRef(null);
+  const ignoreNextIdleRef = useRef(false);
 
-  //  내 위치 마커 ref
   const myMarkerRef = useRef(null);
-
-  // 실제 “내 위치 좌표” 저장 (내 위치 모드 ON일 때만 사용)
   const myLocationRef = useRef(null);
-
-  // 초기 중심 좌표(현위치 실패 시 fallback)
   const centerRef = useRef({ lat: 37.5506, lng: 126.9258 });
 
   const selectedLabel =
     distanceOptions.find((o) => o.km === distanceKm)?.label ?? `${distanceKm}km`;
 
-  /* -------------------- 1) 현재 위치 얻기(Promise) -------------------- */
-  function getMyLocation() {
-    return new Promise((resolve, reject) => {
-      if (!navigator.geolocation) {
-        reject(new Error("GEO_NOT_SUPPORTED"));
-        return;
-      }
-
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          resolve({
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-          });
-        },
-        (err) => reject(err),
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-      );
-    });
-  }
-
-  /* -------------------- helpers: 내 위치 마커/원 제거 -------------------- */
   function clearMyLocationMarker() {
     if (myMarkerRef.current) {
       myMarkerRef.current.setMap(null);
@@ -85,23 +135,18 @@ function MapLayout() {
     }
   }
 
-  /* -------------------- 2) 내 위치 마커(커스텀 이미지) -------------------- */
   function drawMyLocationMarker(lat, lng) {
     const kakao = window.kakao;
     const map = mapRef.current;
     if (!kakao?.maps || !map) return;
 
-    const position = new kakao.maps.LatLng(lat, lng);
-
     clearMyLocationMarker();
+
+    const position = new kakao.maps.LatLng(lat, lng);
 
     const imageSize = new kakao.maps.Size(36, 36);
     const imageOption = { offset: new kakao.maps.Point(18, 36) };
-    const markerImage = new kakao.maps.MarkerImage(
-      myLocationIcon,
-      imageSize,
-      imageOption
-    );
+    const markerImage = new kakao.maps.MarkerImage(myLocationIcon, imageSize, imageOption);
 
     myMarkerRef.current = new kakao.maps.Marker({
       position,
@@ -112,7 +157,116 @@ function MapLayout() {
     myMarkerRef.current.setMap(map);
   }
 
-  // 드롭다운 외부 클릭 닫기
+  function clearMarkers() {
+    markersRef.current.forEach((m) => m.setMap(null));
+    markersRef.current = [];
+  }
+
+  function drawRadiusCircle(km) {
+    const kakao = window.kakao;
+    const map = mapRef.current;
+    if (!kakao?.maps || !map) return;
+
+    if (!isMyLocationMode) {
+      clearCircle();
+      return;
+    }
+
+    const radiusM = Math.round(km * 1000);
+
+    clearCircle();
+
+    circleRef.current = new kakao.maps.Circle({
+      center: new kakao.maps.LatLng(centerRef.current.lat, centerRef.current.lng),
+      radius: radiusM,
+      strokeWeight: 2,
+      strokeColor: PINK,
+      strokeOpacity: 0.9,
+      strokeStyle: "solid",
+      fillColor: PINK,
+      fillOpacity: 0.12,
+    });
+
+    circleRef.current.setMap(map);
+  }
+
+  function drawCafeMarkers(list) {
+    const kakao = window.kakao;
+    const map = mapRef.current;
+    if (!kakao?.maps || !map) return;
+
+    clearMarkers();
+
+    list.forEach((p) => {
+      const imageSize = new kakao.maps.Size(36, 44);
+      const imageOption = { offset: new kakao.maps.Point(18, 44) };
+
+      const markerImage = new kakao.maps.MarkerImage(cafeMarkerIcon, imageSize, imageOption);
+
+      const marker = new kakao.maps.Marker({
+        position: new kakao.maps.LatLng(p.lat, p.lng),
+        image: markerImage,
+        zIndex: 100,
+      });
+
+      marker.setMap(map);
+
+      const iw = new kakao.maps.InfoWindow({
+        content: `<div style="padding:8px 10px;font-size:12px;">${escapeHtml(p.name)}</div>`,
+      });
+
+      kakao.maps.event.addListener(marker, "mouseover", () => iw.open(map, marker));
+      kakao.maps.event.addListener(marker, "mouseout", () => iw.close());
+
+      markersRef.current.push(marker);
+    });
+  }
+
+  function handleCenterTo(place) {
+    const kakao = window.kakao;
+    const map = mapRef.current;
+    if (!kakao?.maps || !map) return;
+
+    ignoreNextIdleRef.current = true;
+    map.panTo(new kakao.maps.LatLng(place.lat, place.lng));
+  }
+
+  async function loadPlacesFromBackendByBrowser(km) {
+    const radius_m = Math.round(km * 1000);
+
+    const { lat, lng, result } = await collectPlacesByBrowser({ km });
+    console.log("collect 성공:", result);
+
+    const list = await fetchPlaces({ lat, lng, radius_m });
+
+    const normalized = (Array.isArray(list) ? list : []).map((p) => ({
+      id: String(p.kakao_id ?? p.id ?? `${p.lat}-${p.lng}-${p.name}`),
+      kakaoId: String(p.kakao_id ?? p.id ?? ""),
+      name: p.name ?? p.place_name ?? "카페",
+      lat: Number(p.lat),
+      lng: Number(p.lng),
+      address: p.address ?? "",
+      url: p.place_url ?? p.url ?? "",
+      distM: haversineMeters(lat, lng, Number(p.lat), Number(p.lng)),
+    }));
+
+    normalized.sort((a, b) => a.distM - b.distM);
+
+    setPlaces(normalized);
+    drawCafeMarkers(normalized);
+
+    if (mapRef.current && window.kakao?.maps) {
+      mapRef.current.panTo(new window.kakao.maps.LatLng(lat, lng));
+      centerRef.current = { lat, lng };
+      drawMyLocationMarker(lat, lng);
+      drawRadiusCircle(km);
+    }
+
+    // 리스트를 불러온 직후 warmup을 "가끔만" 한번 돌려두면
+    // 상세 들어갈 때 logs 매칭이 더 빨라질 수 있음
+    warmupStatusIfNeeded().catch(() => {});
+  }
+
   useEffect(() => {
     const onDocClick = (e) => {
       if (!dropdownRef.current) return;
@@ -122,7 +276,6 @@ function MapLayout() {
     return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 
-  /* -------------------- 3) 지도 초기화 -------------------- */
   useEffect(() => {
     let cancelled = false;
 
@@ -137,35 +290,28 @@ function MapLayout() {
 
       const kakao = window.kakao;
 
-      const centerLatLng = new kakao.maps.LatLng(
-        centerRef.current.lat,
-        centerRef.current.lng
-      );
-
       const map = new kakao.maps.Map(mapContainerRef.current, {
-        center: centerLatLng,
+        center: new kakao.maps.LatLng(centerRef.current.lat, centerRef.current.lng),
         level: 4,
       });
       mapRef.current = map;
 
-     
-      drawRadiusCircle(distanceKm);
-      searchCafes(distanceKm);
-
-     
       kakao.maps.event.addListener(map, "idle", () => {
         const c = map.getCenter();
-        const newCenter = { lat: c.getLat(), lng: c.getLng() };
-        centerRef.current = newCenter;
+        centerRef.current = { lat: c.getLat(), lng: c.getLng() };
 
-        const my = myLocationRef.current;
-        if (isMyLocationMode && my) {
-          const dist = haversineMeters(my.lat, my.lng, newCenter.lat, newCenter.lng);
-          if (dist > 80) setIsMyLocationMode(false);
+        if (!isMyLocationMode) return;
+
+        if (ignoreNextIdleRef.current) {
+          ignoreNextIdleRef.current = false;
+          return;
         }
 
-        drawRadiusCircle(distanceKm);
-        searchCafes(distanceKm);
+        const my = myLocationRef.current;
+        if (my) {
+          const dist = haversineMeters(my.lat, my.lng, c.getLat(), c.getLng());
+          if (dist > 80) setIsMyLocationMode(false);
+        }
       });
     };
 
@@ -173,192 +319,66 @@ function MapLayout() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
+  }, [isMyLocationMode]);
 
   useEffect(() => {
     if (!isMyLocationMode) {
       myLocationRef.current = null;
       clearMyLocationMarker();
       clearCircle();
-    } else {
-      drawRadiusCircle(distanceKm);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMyLocationMode]);
-
-  // 거리 변경 시 원/재검색
-  useEffect(() => {
-    if (!mapRef.current || !window.kakao?.maps?.services) return;
-    drawRadiusCircle(distanceKm);
-    searchCafes(distanceKm);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [distanceKm]);
-
-  function clearMarkers() {
-    markersRef.current.forEach((m) => m.setMap(null));
-    markersRef.current = [];
-  }
-
-  // 내 위치 OFF일 때 원 숨김
-  function drawRadiusCircle(km) {
-    const kakao = window.kakao;
-    const map = mapRef.current;
-    if (!kakao?.maps || !map) return;
-
-    if (!isMyLocationMode) {
-      clearCircle();
+      setSelectedPlace(null);
       return;
     }
 
-    const radiusM = Math.round(km * 1000);
-    const centerLatLng = new kakao.maps.LatLng(
-      centerRef.current.lat,
-      centerRef.current.lng
-    );
-
-    clearCircle();
-
-    circleRef.current = new kakao.maps.Circle({
-      center: centerLatLng,
-      radius: radiusM,
-      strokeWeight: 2,
-      strokeColor: PINK,
-      strokeOpacity: 0.9,
-      strokeStyle: "solid",
-      fillColor: PINK,
-      fillOpacity: 0.12,
+    loadPlacesFromBackendByBrowser(distanceKm).catch((e) => {
+      console.error(e);
+      alert("collect/places 요청에 실패했습니다. 콘솔/네트워크를 확인해주세요.");
+      setIsMyLocationMode(false);
     });
+  }, [isMyLocationMode]);
 
-    circleRef.current.setMap(map);
-  }
+  useEffect(() => {
+    if (!isMyLocationMode) return;
 
-  function searchCafes(km) {
-    const kakao = window.kakao;
-    const map = mapRef.current;
-    if (!kakao?.maps?.services || !map) return;
+    loadPlacesFromBackendByBrowser(distanceKm).catch((e) => {
+      console.error(e);
+      alert("거리 변경 후 요청에 실패했습니다.");
+    });
+  }, [distanceKm]);
 
-    const ps = new kakao.maps.services.Places();
-    const radius = Math.round(km * 1000);
-    const centerLatLng = new kakao.maps.LatLng(
-      centerRef.current.lat,
-      centerRef.current.lng
-    );
-
-    ps.categorySearch(
-      "CE7",
-      (data, status) => {
-        if (status !== kakao.maps.services.Status.OK) {
-          setPlaces([]);
-          clearMarkers();
-          return;
-        }
-
-        clearMarkers();
-
-        const nextPlaces = data
-          .map((p) => {
-            const distM = haversineMeters(
-              centerRef.current.lat,
-              centerRef.current.lng,
-              Number(p.y),
-              Number(p.x)
-            );
-
-            return {
-              id: p.id,
-              name: p.place_name,
-              lat: Number(p.y),
-              lng: Number(p.x),
-              url: p.place_url,
-              distM,
-            };
-          })
-          .sort((a, b) => a.distM - b.distM);
-
-        nextPlaces.forEach((p) => {
-          const imageSize = new kakao.maps.Size(36, 44); // 핀 비율에 맞춤
-          const imageOption = {
-            offset: new kakao.maps.Point(18, 44), // 핀 끝이 좌표
-          };
-
-          const markerImage = new kakao.maps.MarkerImage(
-            cafeMarkerIcon,
-            imageSize,
-            imageOption
-          );
-          const marker = new kakao.maps.Marker({
-            position: new kakao.maps.LatLng(p.lat, p.lng),
-            image: markerImage,
-            zIndex: 100,
-        });
-
-          marker.setMap(map);
-
-          const iw = new kakao.maps.InfoWindow({
-            content: `<div style="padding:8px 10px;font-size:12px;">${escapeHtml(
-              p.name
-            )}</div>`,
-          });
-
-          kakao.maps.event.addListener(marker, "mouseover", () =>
-            iw.open(map, marker)
-          );
-          kakao.maps.event.addListener(marker, "mouseout", () => iw.close());
-
-          markersRef.current.push(marker);
-        });
-
-        setPlaces(nextPlaces);
-      },
-      { location: centerLatLng, radius, sort: kakao.maps.services.SortBy.DISTANCE }
-    );
-  }
-
-  function handleCenterTo(place) {
-    const kakao = window.kakao;
-    const map = mapRef.current;
-    if (!kakao?.maps || !map) return;
-    map.panTo(new kakao.maps.LatLng(place.lat, place.lng));
-  }
-
-  /* -------------------- 4) 내 위치 버튼 클릭 (토글) -------------------- */
   async function handleGoMyLocation() {
-    const kakao = window.kakao;
-    const map = mapRef.current;
-
     if (isMyLocationMode) {
       setIsMyLocationMode(false);
 
-      if (map) {
-        const c = map.getCenter();
+      if (mapRef.current) {
+        const c = mapRef.current.getCenter();
         centerRef.current = { lat: c.getLat(), lng: c.getLng() };
       }
-
-      searchCafes(distanceKm);
       return;
     }
 
     try {
-      const my = await getMyLocation();
-
-      myLocationRef.current = my;
-      centerRef.current = my;
-
-      if (!kakao?.maps || !map) return;
-
-      const myLatLng = new kakao.maps.LatLng(my.lat, my.lng);
-      map.panTo(myLatLng);
-
-      drawMyLocationMarker(my.lat, my.lng);
+      const { lat, lng } = await getMyLocationFallback();
+      myLocationRef.current = { lat, lng };
+      centerRef.current = { lat, lng };
       setIsMyLocationMode(true);
-
-      drawRadiusCircle(distanceKm);
-      searchCafes(distanceKm);
-    } catch (e) {
+    } catch {
       alert("위치 정보를 가져올 수 없습니다. 브라우저 위치 권한을 확인해주세요.");
     }
+  }
+
+  function getMyLocationFallback() {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error("GEO_NOT_SUPPORTED"));
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        reject,
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    });
   }
 
   return (
@@ -366,7 +386,6 @@ function MapLayout() {
       <main style={styles.main}>
         <div ref={mapContainerRef} style={styles.mapWrap} />
 
-        {/* ✅ 내 위치 버튼 */}
         <button
           type="button"
           style={{
@@ -384,7 +403,6 @@ function MapLayout() {
           내 위치
         </button>
 
-        {/* 거리 드롭다운 */}
         <div style={styles.mapOverlay} ref={dropdownRef}>
           <button
             type="button"
@@ -421,18 +439,18 @@ function MapLayout() {
         </div>
       </main>
 
-      {/* ✅ 오른쪽 패널: 목록 / 상세 뷰 전환 */}
       <aside style={styles.rightPanel}>
         {selectedPlace ? (
           <PlaceDetailPanel
             place={selectedPlace}
             onBack={() => setSelectedPlace(null)}
             onCenterTo={() => handleCenterTo(selectedPlace)}
+            onRoute={() => openKakaoRouteToPlace(selectedPlace)}
           />
         ) : (
           <RightPanel
             places={places}
-            onCenterTo={handleCenterTo}
+            onRoute={(p) => openKakaoRouteToPlace(p)}
             onOpenDetail={(p) => {
               setSelectedPlace(p);
               handleCenterTo(p);
@@ -444,13 +462,11 @@ function MapLayout() {
   );
 }
 
-/* -------------------- Right Panel (List) -------------------- */
-
-function RightPanel({ places, onCenterTo, onOpenDetail }) {
+function RightPanel({ places, onOpenDetail, onRoute }) {
   return (
     <div style={styles.rightInner}>
       {places.length === 0 ? (
-        <div style={styles.emptyBox}>표시할 카페가 없습니다.</div>
+        <div style={styles.emptyBox}>내 위치를 키면 주변 카페가 표시돼요.</div>
       ) : (
         places.map((p) => (
           <div key={p.id} style={styles.card}>
@@ -469,19 +485,11 @@ function RightPanel({ places, onCenterTo, onOpenDetail }) {
                   ☆
                 </button>
 
-                <button
-                  type="button"
-                  style={styles.routeBtn}
-                  onClick={() => onCenterTo(p)}
-                >
+                <button type="button" style={styles.routeBtn} onClick={() => onRoute(p)}>
                   길찾기
                 </button>
 
-                <button
-                  type="button"
-                  style={styles.detailBtn}
-                  onClick={() => onOpenDetail(p)}
-                >
+                <button type="button" style={styles.detailBtn} onClick={() => onOpenDetail(p)}>
                   상세보기
                 </button>
               </div>
@@ -493,12 +501,70 @@ function RightPanel({ places, onCenterTo, onOpenDetail }) {
   );
 }
 
-/* -------------------- Right Panel (Detail) -------------------- */
+function PlaceDetailPanel({ place, onBack, onCenterTo, onRoute }) {
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState(null);
+  const [error, setError] = useState("");
 
-function PlaceDetailPanel({ place, onBack, onCenterTo }) {
+  useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      if (!place?.kakaoId) return;
+
+      setLoading(true);
+      setError("");
+      setStatus(null);
+
+      try {
+        // 0) 먼저 logs에서 "이미 있는 값" 빠르게 가져오기
+        const cached = await fetchOpenStatusByKakaoId(place.kakaoId).catch(() => null);
+        if (cancelled) return;
+        if (cached) {
+          setStatus(cached);
+          setLoading(false);
+          return; // 이미 있으면 여기서 끝
+        }
+
+        // 1) 없으면: 상세 수집 + 상태 최신화
+        await collectDetails({}).catch(() => {});
+        if (cancelled) return;
+
+        await refreshStatus({}).catch(() => {});
+        if (cancelled) return;
+
+        // 2) 최신화 끝난 후 logs를 다시 조회해서 매칭
+        const fresh = await fetchOpenStatusByKakaoId(place.kakaoId).catch(() => null);
+        if (cancelled) return;
+
+        setStatus(fresh);
+      } catch (e) {
+        if (!cancelled) setError(e?.message || "상세 정보를 불러오지 못했습니다.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [place?.kakaoId]);
+
+  const isOpenNow = status?.is_open_now;
+  const note = status?.today_status_note ?? null;
+  const openTime = status?.today_open_time ?? null;
+  const closeTime = status?.today_close_time ?? null;
+  const minutesToClose =
+    typeof status?.minutes_to_close === "number" ? status.minutes_to_close : null;
+
+  const remainText =
+    isOpenNow === true && minutesToClose != null
+      ? `${Math.floor(minutesToClose / 60)}시간 ${minutesToClose % 60}분 남음`
+      : null;
+
   return (
     <div style={styles.detailPanel}>
-      {/* 상단 바 */}
       <div style={styles.detailTopBar}>
         <button type="button" onClick={onBack} style={styles.backBtn} aria-label="뒤로가기">
           ←
@@ -511,42 +577,95 @@ function PlaceDetailPanel({ place, onBack, onCenterTo }) {
           </button>
         </div>
 
-        <button type="button" style={styles.routeBtn} onClick={onCenterTo}>
+        <button type="button" style={styles.routeBtn} onClick={onRoute}>
           길찾기
         </button>
       </div>
 
-      {/* 메타 */}
       <div style={styles.detailMetaRow2}>
         <div style={styles.detailMetaItem2}>거리 {formatDistance(place.distM)}</div>
-        <div style={styles.detailMetaItem2}>소요시간 2분</div>
+        <div style={styles.detailMetaItem2}>
+          {loading ? "영업 정보 불러오는 중..." : error ? "영업 정보 오류" : "영업 정보"}
+        </div>
       </div>
 
-      {/* 사진 */}
       <div style={styles.detailPhotos2}>
         <div style={styles.detailPhotoBox2}>카페사진1</div>
         <div style={styles.detailPhotoBox2}>카페사진2</div>
       </div>
 
-      {/* 정보 */}
       <div style={styles.detailInfo2}>
-        <div style={styles.detailInfoRow2}>영업시간 00:00 - 00:00</div>
-        <div style={styles.detailInfoRow2}>주소 00시 00구 00길 00 0층</div>
-        <div style={styles.detailInfoRow2}>리뷰 0,000개</div>
+        <div style={styles.detailInfoRow2}>주소: {place.address || "주소 정보 없음"}</div>
+
+        <div style={styles.detailInfoRow2}>
+          현재 상태:{" "}
+          {loading ? (
+            "불러오는 중..."
+          ) : error ? (
+            "불러오지 못함"
+          ) : isOpenNow === true ? (
+            "영업 중"
+          ) : isOpenNow === false ? (
+            "영업 종료"
+          ) : (
+            "정보 없음"
+          )}
+        </div>
+
+        <div style={styles.detailInfoRow2}>
+          영업시간:{" "}
+          {loading ? (
+            "불러오는 중..."
+          ) : error ? (
+            "-"
+          ) : note ? (
+            note
+          ) : openTime || closeTime ? (
+            `${openTime ?? "?"} ~ ${closeTime ?? "?"}`
+          ) : (
+            "정보 없음"
+          )}
+        </div>
+
+        <div style={styles.detailInfoRow2}>
+          종료까지{" "}
+          {loading ? (
+            "불러오는 중..."
+          ) : error ? (
+            "-"
+          ) : remainText ? (
+            remainText
+          ) : (
+            "-"
+          )}
+        </div>
+
+        {place.url ? (
+          <a href={place.url} target="_blank" rel="noreferrer" style={styles.kakaoLink}>
+            카카오 장소페이지 열기
+          </a>
+        ) : null}
       </div>
 
-      {/* 방문자 리뷰 입력 */}
       <div style={styles.detailReviewList2}>
         {Array.from({ length: 8 }).map((_, i) => (
           <input key={i} style={styles.detailReviewInput2} placeholder="방문자 리뷰" />
         ))}
       </div>
+
+      <button
+        type="button"
+        style={{ ...styles.detailBtn, width: "100%", marginTop: 10 }}
+        onClick={onCenterTo}
+      >
+        지도에서 보기
+      </button>
     </div>
   );
 }
 
-/* ---------------- 유틸 ---------------- */
 
+/* utils */
 function haversineMeters(lat1, lng1, lat2, lng2) {
   const R = 6371000;
   const toRad = (d) => (d * Math.PI) / 180;
@@ -574,8 +693,10 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
-/* ---------------- 스타일 ---------------- */
+/* styles는 네 기존 그대로 유지 */
 
+
+/* styles */
 const PINK = "#84DEEE";
 
 const styles = {
@@ -601,7 +722,6 @@ const styles = {
     height: "100%",
   },
 
-  // 내 위치 버튼
   myLocBtn: {
     position: "absolute",
     top: 12,
@@ -640,7 +760,6 @@ const styles = {
     boxShadow: "0 0 0 3px rgba(0,0,0,0.06)",
   },
 
-  // 거리 드롭다운 오버레이
   mapOverlay: {
     position: "absolute",
     top: 12,
@@ -805,8 +924,6 @@ const styles = {
     cursor: "pointer",
   },
 
-  /* ---------- Detail Panel ---------- */
-
   detailPanel: {
     height: "100%",
     overflowY: "auto",
@@ -918,5 +1035,16 @@ const styles = {
     padding: "0 12px",
     outline: "none",
     fontSize: 13,
+  },
+  
+  detailCenterBtn: {
+    width: "100%",
+    border: "none",
+    background: "rgba(132,222,238,0.25)",
+    color: "#2A7B86",
+    fontWeight: 900,
+    padding: "10px 12px",
+    borderRadius: 12,
+    cursor: "pointer",
   },
 };
