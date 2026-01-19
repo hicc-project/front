@@ -1,7 +1,7 @@
 // src/pages/findcafe/pc/FindCafePc.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import myLocationIcon from "../../../icon/my_location.png";
-import cafeMarkerIcon from "../../../icon/location.png";
+import cafeMarkerIcon from "../../../icon/cafeMarker.png";
 import {
   collectPlacesByBrowser,
   fetchPlaces,
@@ -48,6 +48,8 @@ async function warmupStatusIfNeeded() {
   await collectDetails({}).catch(() => {});
   await refreshStatus({}).catch(() => {});
 }
+
+
 
 async function getLiveStatusFast(kakaoId) {
   if (!kakaoId) return null;
@@ -121,12 +123,14 @@ function MapLayout() {
   const selectedLabel =
     distanceOptions.find((o) => o.km === distanceKm)?.label ?? `${distanceKm}km`;
 
+
   function clearMyLocationMarker() {
     if (myMarkerRef.current) {
       myMarkerRef.current.setMap(null);
       myMarkerRef.current = null;
     }
   }
+
 
   function clearCircle() {
     if (circleRef.current) {
@@ -198,8 +202,8 @@ function MapLayout() {
     clearMarkers();
 
     list.forEach((p) => {
-      const imageSize = new kakao.maps.Size(36, 44);
-      const imageOption = { offset: new kakao.maps.Point(18, 44) };
+      const imageSize = new kakao.maps.Size(18, 22);
+      const imageOption = { offset: new kakao.maps.Point(11, 22) };
 
       const markerImage = new kakao.maps.MarkerImage(cafeMarkerIcon, imageSize, imageOption);
 
@@ -292,7 +296,7 @@ function MapLayout() {
 
       const map = new kakao.maps.Map(mapContainerRef.current, {
         center: new kakao.maps.LatLng(centerRef.current.lat, centerRef.current.lng),
-        level: 4,
+        level: 3,
       });
       mapRef.current = map;
 

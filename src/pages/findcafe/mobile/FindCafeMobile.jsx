@@ -1,7 +1,7 @@
 // src/pages/findcafe/mobile/FindCafeMobile.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import myLocationIcon from "../../../icon/my_location.png";
-import cafeMarkerIcon from "../../../icon/location.png";
+import cafeMarkerIcon from "../../../icon/cafeMarker.png";
 
 import {
   collectPlacesByBrowser,
@@ -139,8 +139,8 @@ export default function FindCafeMobile() {
 
     clearMarkers();
 
-    const imageSize = new kakao.maps.Size(36, 44);
-    const imageOption = { offset: new kakao.maps.Point(18, 44) };
+    const imageSize = new kakao.maps.Size(18, 22);
+    const imageOption = { offset: new kakao.maps.Point(11, 22) };
     const markerImage = new kakao.maps.MarkerImage(
       cafeMarkerIcon,
       imageSize,
@@ -281,7 +281,7 @@ export default function FindCafeMobile() {
 
       const map = new kakao.maps.Map(mapContainerRef.current, {
         center: new kakao.maps.LatLng(centerRef.current.lat, centerRef.current.lng),
-        level: 4,
+        level: 3,
       });
       mapRef.current = map;
 
