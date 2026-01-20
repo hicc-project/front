@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import myLocationIcon from "../../../icon/my_location.png";
 import cafeMarkerIcon from "../../../icon/cafeMarker.png";
+import gotomyloc from "../../../icon/gotomylocation.png";
 
 import {
   collectPlacesByBrowser,
@@ -43,7 +44,8 @@ export default function FindCafeMobile() {
   const centerRef = useRef({ lat: 37.5506, lng: 126.9258 });
 
   const selectedLabel =
-    distanceOptions.find((o) => o.km === distanceKm)?.label ?? `${distanceKm}km`;
+    distanceOptions.find((o) => o.km === distanceKm)?.label ??
+    `${distanceKm}km`;
 
   // ----- open_status_logs 캐시 (모바일 워밍업용) -----
   const statusMapRef = useRef(new Map()); // kakao_id -> status
@@ -111,7 +113,10 @@ export default function FindCafeMobile() {
     clearCircle();
 
     circleRef.current = new kakao.maps.Circle({
-      center: new kakao.maps.LatLng(centerRef.current.lat, centerRef.current.lng),
+      center: new kakao.maps.LatLng(
+        centerRef.current.lat,
+        centerRef.current.lng
+      ),
       radius: Math.round(km * 1000),
       strokeWeight: 2,
       strokeColor: PINK,
@@ -280,7 +285,10 @@ export default function FindCafeMobile() {
       const kakao = window.kakao;
 
       const map = new kakao.maps.Map(mapContainerRef.current, {
-        center: new kakao.maps.LatLng(centerRef.current.lat, centerRef.current.lng),
+        center: new kakao.maps.LatLng(
+          centerRef.current.lat,
+          centerRef.current.lng
+        ),
         level: 3,
       });
       mapRef.current = map;
@@ -335,7 +343,9 @@ export default function FindCafeMobile() {
 
     loadPlacesFromBackendByBrowser(distanceKm).catch((e) => {
       console.error(e);
-      alert("collect/places 요청에 실패했습니다. 콘솔/네트워크를 확인해주세요.");
+      alert(
+        "collect/places 요청에 실패했습니다. 콘솔/네트워크를 확인해주세요."
+      );
       setIsMyLocationMode(false);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -381,7 +391,9 @@ export default function FindCafeMobile() {
       centerRef.current = { lat, lng };
       setIsMyLocationMode(true);
     } catch {
-      alert("위치 정보를 가져올 수 없습니다. 브라우저 위치 권한을 확인해주세요.");
+      alert(
+        "위치 정보를 가져올 수 없습니다. 브라우저 위치 권한을 확인해주세요."
+      );
     }
   }
 
@@ -438,7 +450,9 @@ export default function FindCafeMobile() {
 
             <span style={styles.dropRight}>
               {selectedLabel}
-              <span style={{ ...styles.chev, ...(isOpen ? styles.chevUp : null) }}>
+              <span
+                style={{ ...styles.chev, ...(isOpen ? styles.chevUp : null) }}
+              >
                 ▾
               </span>
             </span>
@@ -470,9 +484,13 @@ export default function FindCafeMobile() {
       {!selectedPlace ? (
         <div style={styles.list}>
           {!isMyLocationMode ? (
-            <div style={styles.hintBox}>내 위치를 키면 주변 카페가 표시돼요.</div>
+            <div style={styles.hintBox}>
+              내 위치를 키면 주변 카페가 표시돼요.
+            </div>
           ) : places.length === 0 ? (
-            <div style={styles.hintBox}>주변 카페를 불러오는 중이거나 결과가 없어요.</div>
+            <div style={styles.hintBox}>
+              주변 카페를 불러오는 중이거나 결과가 없어요.
+            </div>
           ) : (
             places.map((p) => (
               <div key={p.id} style={styles.card}>
@@ -558,7 +576,8 @@ function MobileDetailPanel({
         const s = await getStatusByKakaoId(place.kakaoId);
         if (!cancelled) setStatus(s);
       } catch (e) {
-        if (!cancelled) setError(e?.message || "상세 정보를 불러오지 못했습니다.");
+        if (!cancelled)
+          setError(e?.message || "상세 정보를 불러오지 못했습니다.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -576,7 +595,9 @@ function MobileDetailPanel({
   const openTime = status?.today_open_time ?? null;
   const closeTime = status?.today_close_time ?? null;
   const minutesToClose =
-    typeof status?.minutes_to_close === "number" ? status.minutes_to_close : null;
+    typeof status?.minutes_to_close === "number"
+      ? status.minutes_to_close
+      : null;
 
   const remainText =
     isOpenNow === true && minutesToClose != null
@@ -586,13 +607,22 @@ function MobileDetailPanel({
   return (
     <div style={styles.detailWrap}>
       <div style={styles.detailHeader}>
-        <button type="button" style={styles.backBtn} onClick={onBack} aria-label="뒤로">
+        <button
+          type="button"
+          style={styles.backBtn}
+          onClick={onBack}
+          aria-label="뒤로"
+        >
           ←
         </button>
 
         <div style={styles.detailTitleRow}>
           <div style={styles.detailTitle}>{place.name}</div>
-          <button type="button" style={styles.detailStar} title="즐겨찾기(미구현)">
+          <button
+            type="button"
+            style={styles.detailStar}
+            title="즐겨찾기(미구현)"
+          >
             ☆
           </button>
         </div>
@@ -603,9 +633,15 @@ function MobileDetailPanel({
       </div>
 
       <div style={styles.detailMetaRow}>
-        <div style={styles.detailMetaPill}>거리 {formatDistance(place.distM)}</div>
         <div style={styles.detailMetaPill}>
-          {loading ? "영업 정보 불러오는 중..." : error ? "영업 정보 오류" : "영업 정보"}
+          거리 {formatDistance(place.distM)}
+        </div>
+        <div style={styles.detailMetaPill}>
+          {loading
+            ? "영업 정보 불러오는 중..."
+            : error
+            ? "영업 정보 오류"
+            : "영업 정보"}
         </div>
       </div>
 
@@ -615,25 +651,54 @@ function MobileDetailPanel({
       </div>
 
       <div style={styles.detailInfo}>
-        <div style={styles.detailInfoRow}>주소: {place.address || "주소 정보 없음"}</div>
+        <div style={styles.detailInfoRow}>
+          주소: {place.address || "주소 정보 없음"}
+        </div>
 
         <div style={styles.detailInfoRow}>
           현재 상태:{" "}
-          {loading ? "불러오는 중..." : error ? "불러오지 못함" : isOpenNow === true ? "영업 중" : isOpenNow === false ? "영업 종료" : "정보 없음"}
+          {loading
+            ? "불러오는 중..."
+            : error
+            ? "불러오지 못함"
+            : isOpenNow === true
+            ? "영업 중"
+            : isOpenNow === false
+            ? "영업 종료"
+            : "정보 없음"}
         </div>
 
         <div style={styles.detailInfoRow}>
           영업시간:{" "}
-          {loading ? "불러오는 중..." : error ? "-" : note ? note : openTime || closeTime ? `${openTime ?? "?"} ~ ${closeTime ?? "?"}` : "정보 없음"}
+          {loading
+            ? "불러오는 중..."
+            : error
+            ? "-"
+            : note
+            ? note
+            : openTime || closeTime
+            ? `${openTime ?? "?"} ~ ${closeTime ?? "?"}`
+            : "정보 없음"}
         </div>
 
         <div style={styles.detailInfoRow}>
           종료까지{" "}
-          {loading ? "불러오는 중..." : error ? "-" : remainText ? remainText : "정보 없음"}
+          {loading
+            ? "불러오는 중..."
+            : error
+            ? "-"
+            : remainText
+            ? remainText
+            : "정보 없음"}
         </div>
 
         {place.url ? (
-          <a href={place.url} target="_blank" rel="noreferrer" style={styles.kakaoLink}>
+          <a
+            href={place.url}
+            target="_blank"
+            rel="noreferrer"
+            style={styles.kakaoLink}
+          >
             카카오 장소페이지 열기
           </a>
         ) : null}
@@ -818,10 +883,7 @@ const styles = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center   ",
-
   },
-
-
 
   textBlock: {
     minWidth: 0,

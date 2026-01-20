@@ -2,13 +2,14 @@
 import { NavLink } from "react-router-dom";
 import { icons } from "../../icon/icons";
 import { navItems } from "./navItems";
+import logorec from "../../icon/logo_rec.png";
 
 export default function SidebarDesktop() {
   return (
     <aside className="sidebar">
       {/* Top */}
       <div className="sidebarTop">
-        <div className="appName">로고</div>
+        <img src={logorec} alt="앱 로고" className="navIcon6" />
       </div>
 
       {/* Middle: main nav */}
@@ -53,7 +54,6 @@ export default function SidebarDesktop() {
                 alt=""
                 aria-hidden="true"
               />
-             
             </>
           )}
         </NavLink>

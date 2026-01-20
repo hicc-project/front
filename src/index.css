@@ -75,6 +75,11 @@ body {
   object-fit: contain;
 }
 
+.navIcon6 {
+  width: 80px;
+  height: 40px;
+}
+
 .sidebarTop .appName {
   font-weight: 800;
   font-size: 14px;
@@ -107,7 +112,8 @@ body {
   font-weight: 700;
 }
 
-.sidebarBottom { padding-top: 10px;
+.sidebarBottom {
+  padding-top: 10px;
 }
 
 .contentShell {
@@ -125,29 +131,95 @@ body {
 .hero {
   height: 320px;
   border-radius: 18px;
-  background: linear-gradient(180deg, #68D0E4, #dcf4fa);
+  background: linear-gradient(180deg, #68d0e4, #dcf4fa);
   position: relative;
   overflow: hidden;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
 }
 
-.heroTopRight {
+.auth-actions {
   position: absolute;
-  right: 18px;
-  top: 14px;
-  color: rgba(255, 255, 255, 0.9);
-  font-weight: 800;
-  font-size: 34px;
+  top: 16px;
+  right: 16px;
 }
 
-.heroCenter {
+.auth-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+}
+
+.auth-modal__overlay {
   position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.auth-modal__panel {
+  position: relative;
+  width: 420px;
+  max-width: calc(100vw - 32px);
+  margin: 80px auto 0;
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+/* 헤더 */
+.auth-modal__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.auth-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+.auth-field__input {
+  width: 100%;
+  padding: 10px;
+}
+.auth-form__actions {
+  display: flex;
+  gap: 8px;
+}
+.auth-error {
+  color: #c00;
+}
+.auth-done {
+  color: #060;
+}
+
+.heroLogo {
+  width: 300px;
+  height: 150px;
+  position: absolute;
+  top: 50%;
   left: 50%;
-  top: 52%;
-  transform: translate(-50%, -50%);
-  color: white;
-  font-weight: 900;
-  font-size: 44px;
+  transform: translate(-50%, -50%); /* 가로/세로 중앙 */
+}
+
+.login {
+  background: #ffffff;
+  color: #68d0e4;
+  margin-right: 3px;
+  border: none;
+}
+
+.login:hover {
+  background: #f3fafd;
+}
+
+.signin {
+  background: #ffffff;
+  color: #68d0e4;
+  border: none;
+}
+
+.signin:hover {
+  background: #f3fafd;
 }
 
 .grid2 {
@@ -209,7 +281,7 @@ body {
   text-align: center;
   padding: 10px 10px;
   border-radius: 14px;
-  background: #84DEEE;
+  background: #84deee;
   color: #fff;
   font-weight: 800;
   font-size: 12px;
@@ -230,7 +302,7 @@ body {
   background: transparent;
   cursor: pointer;
   font-size: 20px;
-  color: #84DEEE;
+  color: #84deee;
 }
 
 .cardRow {
@@ -243,7 +315,7 @@ body {
   border-radius: 18px;
   overflow: hidden;
   border: 1px solid #f0e3e8;
-  background: #A4E6F2;
+  background: #a4e6f2;
   position: relative;
 }
 
@@ -256,7 +328,7 @@ body {
   border-radius: 999px;
   font-size: 12px;
   font-weight: 800;
-  color: #68D0E4;
+  color: #68d0e4;
 }
 
 .cafeImgPlaceholder {
@@ -265,7 +337,7 @@ body {
   place-items: center;
   color: rgba(0, 0, 0, 0.5);
   font-weight: 800;
-  background: #e9e9e9
+  background: #e9e9e9;
 }
 
 .cafeFooter {
@@ -324,7 +396,7 @@ body {
 }
 
 .findcafe-menu-item:hover {
-  background: #A3E6F2;
+  background: #a3e6f2;
   color: #ffffff;
 }
 
@@ -345,7 +417,6 @@ body {
   grid-template-columns: repeat(4, 1fr);
   align-items: center;
 
-  
   z-index: 10000;
 }
 
@@ -355,7 +426,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap:4px;
+  gap: 4px;
   color: #9a9a9a;
   font-weight: 800;
   font-size: 12px;
@@ -371,7 +442,7 @@ body {
 }
 
 .mnavIconStar {
-  width: 30px;        
+  width: 30px;
   height: 50px;
   transform: translateY(-1px); /* 세로 미세 조정 */
 }
@@ -382,7 +453,7 @@ body {
 
 /* 활성 탭 */
 .mnavActive {
-  color: #A3E6F2;
+  color: #a3e6f2;
 }
 .mnavActive .mnavIcon {
   opacity: 1;

@@ -1,12 +1,14 @@
+import React from "react";
+import AuthButtons from "./AuthButtons";
+import logoRec from "../../../icon/logo_rec.png";
+
 export default function HomePc() {
   return (
     <div className="page">
-      {/* 상단 배너 */}
       <section className="hero">
-        <div className="heroTopRight">[디자인 이미지]</div>
-        <div className="heroCenter">앱이름(로고)</div>
+        <AuthButtons />
+        <img src={logoRec} alt="앱 로고" className="heroLogo" />
       </section>
-
       {/* 하단 콘텐츠 */}
       <section className="grid2">
         {/* 좌측 NEW */}
