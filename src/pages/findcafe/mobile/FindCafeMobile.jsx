@@ -8,10 +8,12 @@ import {
   collectPlacesByBrowser,
   fetchPlaces,
   openKakaoRouteToPlace,
-  collectDetails,
-  refreshStatus,
-  fetchOpenStatusLogs,
+  fetchOpenStatusByKakaoId,
 } from "../../../utils/cafeApi";
+
+import { useCafeStatus } from "../../../providers/CafeStatusProvider";
+import { useCafeFinderState } from "../../../providers/CafeFinderStateProvider";
+
 
 export default function FindCafeMobile() {
   const distanceOptions = useMemo(
@@ -24,35 +26,73 @@ export default function FindCafeMobile() {
     []
   );
 
-  const [distanceKm, setDistanceKm] = useState(1.0);
-  const [places, setPlaces] = useState([]);
-  const [isOpen, setIsOpen] = useState(false);
+  const {
+    distanceKm,
+    setDistanceKm,
+    places,
+    setPlaces,
+    selectedPlace,
+    setSelectedPlace,
+    isMyLocationMode,
+    setIsMyLocationMode,
+    center,
+    setCenter,
+    myLocation,
+    setMyLocation,
+  } = useCafeFinderState();
 
-  const [selectedPlace, setSelectedPlace] = useState(null);
-  const [isMyLocationMode, setIsMyLocationMode] = useState(false);
+  const { openStatusMap, version: openStatusVersion } = useCafeStatus();
+
+  // ✅ 페이지 처음 들어오면 바로 "내 위치" 모드로 시작
+  const autoMyLocInitRef = useRef(false);
+  useEffect(() => {
+    if (autoMyLocInitRef.current) return;
+    autoMyLocInitRef.current = true;
+
+    // 이미 myLocation이 저장돼 있으면 그대로 ON
+    if (myLocation?.lat && myLocation?.lng) {
+      setIsMyLocationMode(true);
+      return;
+    }
+
+    getMyLocationFallback()
+      .then(({ lat, lng }) => {
+        setMyLocation({ lat, lng });
+        setCenter({ lat, lng });
+        setIsMyLocationMode(true);
+      })
+      .catch(() => {
+        // 권한 거부 등일 때는 기본 중심좌표 유지
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const [isOpen, setIsOpen] = useState(false);
 
   const dropdownRef = useRef(null);
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
+
+  const [mapReadyVersion, setMapReadyVersion] = useState(0);
 
   const markersRef = useRef([]);
   const circleRef = useRef(null);
   const myMarkerRef = useRef(null);
   const ignoreNextIdleRef = useRef(false);
 
-  const myLocationRef = useRef(null);
-  const centerRef = useRef({ lat: 37.5506, lng: 126.9258 });
+  const myLocationRef = useRef(myLocation);
+  const centerRef = useRef(center);
+
+  useEffect(() => {
+    myLocationRef.current = myLocation;
+  }, [myLocation]);
+
+  useEffect(() => {
+    centerRef.current = center;
+  }, [center]);
 
   const selectedLabel =
-    distanceOptions.find((o) => o.km === distanceKm)?.label ??
-    `${distanceKm}km`;
-
-  // ----- open_status_logs 캐시 (모바일 워밍업용) -----
-  const statusMapRef = useRef(new Map()); // kakao_id -> status
-  const statusUpdatedAtRef = useRef(0);
-  const warmupRunningRef = useRef(false);
-  const [statusVersion, setStatusVersion] = useState(0);
-  const STATUS_TTL_MS = 30 * 1000;
+    distanceOptions.find((o) => o.km === distanceKm)?.label ?? `${distanceKm}km`;
 
   /* ---------------- 지도 helpers ---------------- */
 
@@ -113,10 +153,7 @@ export default function FindCafeMobile() {
     clearCircle();
 
     circleRef.current = new kakao.maps.Circle({
-      center: new kakao.maps.LatLng(
-        centerRef.current.lat,
-        centerRef.current.lng
-      ),
+      center: new kakao.maps.LatLng(centerRef.current.lat, centerRef.current.lng),
       radius: Math.round(km * 1000),
       strokeWeight: 2,
       strokeColor: PINK,
@@ -169,55 +206,6 @@ export default function FindCafeMobile() {
     });
   }
 
-  /* ---------------- 워밍업/캐시 (PC와 동일 개념) ---------------- */
-
-  async function warmupOpenStatusIfNeeded({ force = false } = {}) {
-    if (!isMyLocationMode) return;
-    if (warmupRunningRef.current) return;
-
-    const now = Date.now();
-    const age = now - (statusUpdatedAtRef.current || 0);
-    if (!force && age < STATUS_TTL_MS) return;
-
-    warmupRunningRef.current = true;
-    try {
-      await collectDetails({}).catch(() => {});
-      await refreshStatus({}).catch(() => {});
-
-      const logs = await fetchOpenStatusLogs().catch(() => []);
-      const list = Array.isArray(logs) ? logs : [];
-
-      const m = new Map();
-      list.forEach((x) => {
-        const key = String(x?.kakao_id ?? "");
-        if (key) m.set(key, x);
-      });
-
-      statusMapRef.current = m;
-      statusUpdatedAtRef.current = Date.now();
-      setStatusVersion((v) => v + 1);
-    } finally {
-      warmupRunningRef.current = false;
-    }
-  }
-
-  function getCachedStatusByKakaoId(kakaoId) {
-    const key = String(kakaoId ?? "");
-    if (!key) return null;
-    return statusMapRef.current.get(key) || null;
-  }
-
-  async function getStatusByKakaoId(kakaoId) {
-    const now = Date.now();
-    const age = now - (statusUpdatedAtRef.current || 0);
-
-    const cached = getCachedStatusByKakaoId(kakaoId);
-    if (cached && age < STATUS_TTL_MS) return cached;
-
-    await warmupOpenStatusIfNeeded({ force: true });
-    return getCachedStatusByKakaoId(kakaoId);
-  }
-
   /* ---------------- backend sync ---------------- */
 
   async function loadPlacesFromBackendByBrowser(km) {
@@ -239,6 +227,7 @@ export default function FindCafeMobile() {
       distM: haversineMeters(lat, lng, Number(p.lat), Number(p.lng)),
     }));
 
+    // 원본은 거리순 유지
     normalized.sort((a, b) => a.distM - b.distM);
 
     setPlaces(normalized);
@@ -247,6 +236,7 @@ export default function FindCafeMobile() {
     if (mapRef.current && window.kakao?.maps) {
       mapRef.current.panTo(new window.kakao.maps.LatLng(lat, lng));
       centerRef.current = { lat, lng };
+      setCenter({ lat, lng });
       drawMyLocationMarker(lat, lng);
       drawCircle(km);
     }
@@ -256,8 +246,7 @@ export default function FindCafeMobile() {
       if (!stillExists) setSelectedPlace(null);
     }
 
-    // 중요: 목록 로드 직후 1회 워밍업
-    warmupOpenStatusIfNeeded({ force: true }).catch(() => {});
+    // ✅ 전역 영업정보는 Provider가 관리하므로 여기서 warmup 호출 금지
   }
 
   /* ---------------- dropdown 외부 클릭 닫기 ---------------- */
@@ -269,7 +258,7 @@ export default function FindCafeMobile() {
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
 
-  /* ---------------- 초기 지도 ---------------- */
+  /* ---------------- 초기 지도 (1회) ---------------- */
   useEffect(() => {
     let cancelled = false;
 
@@ -285,22 +274,21 @@ export default function FindCafeMobile() {
       const kakao = window.kakao;
 
       const map = new kakao.maps.Map(mapContainerRef.current, {
-        center: new kakao.maps.LatLng(
-          centerRef.current.lat,
-          centerRef.current.lng
-        ),
+        center: new kakao.maps.LatLng(centerRef.current.lat, centerRef.current.lng),
         level: 3,
       });
       mapRef.current = map;
+      setMapReadyVersion((v) => v + 1);
 
+      // 기존 places는 Provider에 남겨두고, 지도에만 반영
       clearMarkers();
       clearCircle();
       clearMyLocationMarker();
-      setPlaces([]);
 
       kakao.maps.event.addListener(map, "idle", () => {
         const c = map.getCenter();
         centerRef.current = { lat: c.getLat(), lng: c.getLng() };
+        setCenter(centerRef.current);
 
         if (!isMyLocationMode) return;
 
@@ -322,30 +310,38 @@ export default function FindCafeMobile() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMyLocationMode]);
+  }, []);
+
+  // map이 다시 만들어져도(페이지 이동 후 복귀), Provider에 저장된 상태를 지도에 재반영
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !window.kakao?.maps) return;
+
+    if (Array.isArray(places) && places.length > 0) {
+      drawCafeMarkers(places);
+    }
+
+    if (isMyLocationMode && myLocation?.lat && myLocation?.lng) {
+      drawMyLocationMarker(myLocation.lat, myLocation.lng);
+      drawCircle(distanceKm);
+    } else {
+      clearMyLocationMarker();
+      clearCircle();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapReadyVersion, places, isMyLocationMode, myLocation, distanceKm]);
 
   // 내 위치 모드 ON/OFF
   useEffect(() => {
     if (!isMyLocationMode) {
-      myLocationRef.current = null;
       clearMyLocationMarker();
       clearCircle();
-      clearMarkers();
-      setPlaces([]);
-      setSelectedPlace(null);
-
-      // 캐시도 비움
-      statusMapRef.current = new Map();
-      statusUpdatedAtRef.current = 0;
-      setStatusVersion((v) => v + 1);
       return;
     }
 
     loadPlacesFromBackendByBrowser(distanceKm).catch((e) => {
       console.error(e);
-      alert(
-        "collect/places 요청에 실패했습니다. 콘솔/네트워크를 확인해주세요."
-      );
+      alert("collect/places 요청에 실패했습니다. 콘솔/네트워크를 확인해주세요.");
       setIsMyLocationMode(false);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -362,18 +358,6 @@ export default function FindCafeMobile() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [distanceKm]);
 
-  // (선택) 켜져있는 동안 30초마다 백그라운드 갱신
-  useEffect(() => {
-    if (!isMyLocationMode) return;
-
-    const t = setInterval(() => {
-      warmupOpenStatusIfNeeded({ force: false }).catch(() => {});
-    }, STATUS_TTL_MS);
-
-    return () => clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMyLocationMode]);
-
   async function handleGoMyLocation() {
     if (isMyLocationMode) {
       setIsMyLocationMode(false);
@@ -388,12 +372,12 @@ export default function FindCafeMobile() {
     try {
       const { lat, lng } = await getMyLocationFallback();
       myLocationRef.current = { lat, lng };
+      setMyLocation({ lat, lng });
       centerRef.current = { lat, lng };
+      setCenter({ lat, lng });
       setIsMyLocationMode(true);
     } catch {
-      alert(
-        "위치 정보를 가져올 수 없습니다. 브라우저 위치 권한을 확인해주세요."
-      );
+      alert("위치 정보를 가져올 수 없습니다. 브라우저 위치 권한을 확인해주세요.");
     }
   }
 
@@ -415,6 +399,33 @@ export default function FindCafeMobile() {
     });
   }
 
+  // ✅ PC와 동일 정렬 규칙: 남은시간 많은 순(있으면 우선), 없으면 거리순
+  function minutesToCloseFor(place) {
+    const s = openStatusMap[String(place.kakaoId)];
+    const m = s?.minutes_to_close;
+    if (typeof m === "number") return m;
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  const sortedPlaces = useMemo(() => {
+    const arr = [...(places || [])];
+
+    arr.sort((a, b) => {
+      const ma = minutesToCloseFor(a);
+      const mb = minutesToCloseFor(b);
+
+      if (ma !== Number.NEGATIVE_INFINITY && mb !== Number.NEGATIVE_INFINITY) {
+        return mb - ma; // 남은시간 많은 순
+      }
+      if (ma !== Number.NEGATIVE_INFINITY) return -1;
+      if (mb !== Number.NEGATIVE_INFINITY) return 1;
+
+      return a.distM - b.distM; // 둘 다 없으면 거리순
+    });
+
+    return arr;
+  }, [places, openStatusVersion, openStatusMap]);
+
   return (
     <div style={styles.page}>
       <div style={styles.mapArea}>
@@ -428,13 +439,8 @@ export default function FindCafeMobile() {
           }}
           onClick={handleGoMyLocation}
         >
-          <span
-            style={{
-              ...styles.myLocDot,
-              opacity: isMyLocationMode ? 1 : 0,
-            }}
-          />
-          내 위치
+          <img src={gotomyloc} alt="" style={{ width: 16, height: 16 }} />
+         
         </button>
 
         <div style={styles.overlay} ref={dropdownRef}>
@@ -450,9 +456,7 @@ export default function FindCafeMobile() {
 
             <span style={styles.dropRight}>
               {selectedLabel}
-              <span
-                style={{ ...styles.chev, ...(isOpen ? styles.chevUp : null) }}
-              >
+              <span style={{ ...styles.chev, ...(isOpen ? styles.chevUp : null) }}>
                 ▾
               </span>
             </span>
@@ -484,15 +488,11 @@ export default function FindCafeMobile() {
       {!selectedPlace ? (
         <div style={styles.list}>
           {!isMyLocationMode ? (
-            <div style={styles.hintBox}>
-              내 위치를 키면 주변 카페가 표시돼요.
-            </div>
+            <div style={styles.hintBox}>내 위치를 키면 주변 카페가 표시돼요.</div>
           ) : places.length === 0 ? (
-            <div style={styles.hintBox}>
-              주변 카페를 불러오는 중이거나 결과가 없어요.
-            </div>
+            <div style={styles.hintBox}>주변 카페를 불러오는 중이거나 결과가 없어요.</div>
           ) : (
-            places.map((p) => (
+            sortedPlaces.map((p) => (
               <div key={p.id} style={styles.card}>
                 <div style={styles.textBlock}>
                   <div style={styles.name}>{p.name}</div>
@@ -508,7 +508,7 @@ export default function FindCafeMobile() {
                       panToPlace(p);
                     }}
                   >
-                    상세보기
+                    상세정보
                   </button>
 
                   <button
@@ -528,76 +528,67 @@ export default function FindCafeMobile() {
           place={selectedPlace}
           onBack={() => setSelectedPlace(null)}
           onRoute={() => openKakaoRouteToPlace(selectedPlace)}
-          getStatusByKakaoId={getStatusByKakaoId}
-          getCachedStatusByKakaoId={getCachedStatusByKakaoId}
-          statusVersion={statusVersion}
         />
       )}
     </div>
   );
 }
 
-function MobileDetailPanel({
-  place,
-  onBack,
-  onRoute,
-  getStatusByKakaoId,
-  getCachedStatusByKakaoId,
-  statusVersion,
-}) {
+/* ---------------- Detail Panel (PC와 동일 원칙) ---------------- */
+
+function MobileDetailPanel({ place, onBack, onRoute }) {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(null);
   const [error, setError] = useState("");
 
-  // 캐시 갱신되면 현재 place 상태도 즉시 갱신
-  useEffect(() => {
-    const cached = getCachedStatusByKakaoId(place?.kakaoId);
-    if (cached) setStatus(cached);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [place?.kakaoId, statusVersion]);
+  const { openStatusMap, version, warmupIfNeeded } = useCafeStatus();
 
+  // 1) 전역 logs에 있으면 즉시 반영
+  useEffect(() => {
+    if (!place?.kakaoId) return;
+   const s = openStatusMap[String(place.kakaoId)];
+    if (s) setStatus(s); // ✅ 있을 때만 갱신 (없으면 기존 status 유지)
+  }, [place?.kakaoId, openStatusMap, version]);
+
+  // 2) 없으면 단건 조회 + warmup 트리거(기다리지 않음)
   useEffect(() => {
     let cancelled = false;
 
-    async function run() {
+    (async () => {
       if (!place?.kakaoId) return;
 
       setLoading(true);
       setError("");
 
       try {
-        const cached = getCachedStatusByKakaoId(place.kakaoId);
-        if (!cancelled && cached) {
+        const cached = await fetchOpenStatusByKakaoId(place.kakaoId).catch(() => null);
+        if (cancelled) return;
+
+        if (cached) {
           setStatus(cached);
-          setLoading(false);
           return;
         }
 
-        const s = await getStatusByKakaoId(place.kakaoId);
-        if (!cancelled) setStatus(s);
+        // ✅ collect_details/refresh_status는 Provider가 처리
+        warmupIfNeeded();
       } catch (e) {
-        if (!cancelled)
-          setError(e?.message || "상세 정보를 불러오지 못했습니다.");
+        if (!cancelled) setError("영업 정보를 불러오지 못했습니다.");
       } finally {
         if (!cancelled) setLoading(false);
       }
-    }
+    })();
 
-    run();
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [place?.kakaoId]);
+  }, [place?.kakaoId, warmupIfNeeded]);
 
   const isOpenNow = status?.is_open_now;
   const note = status?.today_status_note ?? null;
   const openTime = status?.today_open_time ?? null;
   const closeTime = status?.today_close_time ?? null;
   const minutesToClose =
-    typeof status?.minutes_to_close === "number"
-      ? status.minutes_to_close
-      : null;
+    typeof status?.minutes_to_close === "number" ? status.minutes_to_close : null;
 
   const remainText =
     isOpenNow === true && minutesToClose != null
@@ -607,22 +598,13 @@ function MobileDetailPanel({
   return (
     <div style={styles.detailWrap}>
       <div style={styles.detailHeader}>
-        <button
-          type="button"
-          style={styles.backBtn}
-          onClick={onBack}
-          aria-label="뒤로"
-        >
+        <button type="button" style={styles.backBtn} onClick={onBack} aria-label="뒤로">
           ←
         </button>
 
         <div style={styles.detailTitleRow}>
           <div style={styles.detailTitle}>{place.name}</div>
-          <button
-            type="button"
-            style={styles.detailStar}
-            title="즐겨찾기(미구현)"
-          >
+          <button type="button" style={styles.detailStar} title="즐겨찾기(미구현)">
             ☆
           </button>
         </div>
@@ -633,15 +615,9 @@ function MobileDetailPanel({
       </div>
 
       <div style={styles.detailMetaRow}>
+        <div style={styles.detailMetaPill}>거리 {formatDistance(place.distM)}</div>
         <div style={styles.detailMetaPill}>
-          거리 {formatDistance(place.distM)}
-        </div>
-        <div style={styles.detailMetaPill}>
-          {loading
-            ? "영업 정보 불러오는 중..."
-            : error
-            ? "영업 정보 오류"
-            : "영업 정보"}
+          {loading ? "영업 정보 불러오는 중..." : error ? "영업 정보 오류" : "영업 정보"}
         </div>
       </div>
 
@@ -651,9 +627,7 @@ function MobileDetailPanel({
       </div>
 
       <div style={styles.detailInfo}>
-        <div style={styles.detailInfoRow}>
-          주소: {place.address || "주소 정보 없음"}
-        </div>
+        <div style={styles.detailInfoRow}>주소: {place.address || "주소 정보 없음"}</div>
 
         <div style={styles.detailInfoRow}>
           현재 상태:{" "}
@@ -683,22 +657,11 @@ function MobileDetailPanel({
 
         <div style={styles.detailInfoRow}>
           종료까지{" "}
-          {loading
-            ? "불러오는 중..."
-            : error
-            ? "-"
-            : remainText
-            ? remainText
-            : "정보 없음"}
+          {loading ? "불러오는 중..." : error ? "-" : remainText ? remainText : "정보 없음"}
         </div>
 
         {place.url ? (
-          <a
-            href={place.url}
-            target="_blank"
-            rel="noreferrer"
-            style={styles.kakaoLink}
-          >
+          <a href={place.url} target="_blank" rel="noreferrer" style={styles.kakaoLink}>
             카카오 장소페이지 열기
           </a>
         ) : null}
@@ -910,9 +873,9 @@ const styles = {
   },
 
   detailBtn: {
-    border: `1px solid ${PINK}`,
+    border: "1px solid #D2D2D2",
     background: "#fff",
-    color: PINK,
+    color: "#9A9A9A",
     padding: "6px 10px",
     borderRadius: 14,
     fontWeight: 900,

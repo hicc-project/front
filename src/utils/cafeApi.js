@@ -165,7 +165,7 @@ let lastWarmupAt = 0;
 export async function getCafeLiveStatus({
   kakaoId,
   logsTtlMs = 30000,
-  warmupCooldownMs = 120000, // 2분에 1번만 최신화 트리거
+  warmupCooldownMs = 240000, // 4분에 1번만 최신화 트리거
 } = {}) {
   if (!kakaoId) return null;
 

@@ -14,28 +14,24 @@ import {
   fetchOpenStatusLogs,
 } from "../../../utils/cafeApi";
 
+import { useCafeStatus } from "../../../providers/CafeStatusProvider";
+import { useCafeFinderState } from "../../../providers/CafeFinderStateProvider";
+
 /* ---------------------------
   상세 영업정보 최적화(캐시/쿨다운)
   - open_status_logs: 30초 캐시
-  - collect_details/refresh_status: 2분 쿨다운(너무 자주 호출 금지)
+  - collect_details/refresh_status: 4분 쿨다운(너무 자주 호출 금지)
 ---------------------------- */
 const OPEN_LOGS_TTL_MS = 30_000;
-const WARMUP_COOLDOWN_MS = 120_000;
+const WARMUP_COOLDOWN_MS = 240_000;
 
-let _openLogsCache = {
-  ts: 0,
-  data: null,
-};
 
+let _openLogsCache = { ts: 0, data: null };
 let _lastWarmupAt = 0;
 
 async function getOpenLogsCached({ force = false } = {}) {
   const now = Date.now();
-  if (
-    !force &&
-    _openLogsCache.data &&
-    now - _openLogsCache.ts < OPEN_LOGS_TTL_MS
-  ) {
+  if (!force && _openLogsCache.data && now - _openLogsCache.ts < OPEN_LOGS_TTL_MS) {
     return _openLogsCache.data;
   }
   const logs = await fetchOpenStatusLogs();
@@ -47,53 +43,10 @@ async function getOpenLogsCached({ force = false } = {}) {
 async function warmupStatusIfNeeded() {
   const now = Date.now();
   if (now - _lastWarmupAt < WARMUP_COOLDOWN_MS) return;
-
   _lastWarmupAt = now;
 
-  // warmup은 실패해도 화면은 뜨게(로그 조회는 계속 시도)
   await collectDetails({}).catch(() => {});
   await refreshStatus({}).catch(() => {});
-}
-
-async function getLiveStatusFast(kakaoId) {
-  if (!kakaoId) return null;
-
-  function isUsableStatus(x) {
-    if (!x) return false;
-    // 이 중 하나라도 있으면 "쓸만한 상태"로 판단
-    const hasOpenFlag = x.is_open_now === true || x.is_open_now === false;
-    const hasNote =
-      typeof x.today_status_note === "string" &&
-      x.today_status_note.trim() !== "";
-    const hasTimes = !!x.today_open_time || !!x.today_close_time;
-    return hasOpenFlag || hasNote || hasTimes;
-  }
-
-  // 1) 캐시된 logs에서 먼저 찾기
-  const cachedLogs = await getOpenLogsCached({ force: false }).catch(
-    () => null
-  );
-  if (cachedLogs) {
-    const list = Array.isArray(cachedLogs) ? cachedLogs : [];
-    const hit =
-      list.find((x) => String(x.kakao_id) === String(kakaoId)) || null;
-
-    // hit이 있고 내용도 괜찮으면 바로 반환
-    if (isUsableStatus(hit)) return hit;
-
-    // hit이 있지만 null 투성이면 -> warmup 후 fresh로 다시 찾기
-  }
-
-  // 2) warmup (쿨다운 통과 시에만 실제 호출됨)
-  await warmupStatusIfNeeded();
-
-  // 3) fresh logs로 매칭
-  const freshLogs = await getOpenLogsCached({ force: true }).catch(() => null);
-  const list2 = Array.isArray(freshLogs) ? freshLogs : [];
-  const hit2 =
-    list2.find((x) => String(x.kakao_id) === String(kakaoId)) || null;
-
-  return hit2;
 }
 
 export default function FindCafePc() {
@@ -111,14 +64,51 @@ function MapLayout() {
     []
   );
 
-  const [distanceKm, setDistanceKm] = useState(1.0);
-  const [places, setPlaces] = useState([]);
-  const [selectedPlace, setSelectedPlace] = useState(null);
-  const [isMyLocationMode, setIsMyLocationMode] = useState(false);
+  const {
+    distanceKm,
+    setDistanceKm,
+    places,
+    setPlaces,
+    selectedPlace,
+    setSelectedPlace,
+    isMyLocationMode,
+    setIsMyLocationMode,
+    center,
+    setCenter,
+    myLocation,
+    setMyLocation,
+  } = useCafeFinderState();
 
+  const { openStatusMap, version: openStatusVersion, warmupIfNeeded } = useCafeStatus();
+
+  // ✅ 페이지 처음 들어오면 바로 "내 위치" 모드로 시작
+  const autoMyLocInitRef = useRef(false);
+  useEffect(() => {
+    if (autoMyLocInitRef.current) return;
+    autoMyLocInitRef.current = true;
+
+    if (myLocation?.lat && myLocation?.lng) {
+      setIsMyLocationMode(true);
+      return;
+    }
+
+    getMyLocationFallback()
+      .then(({ lat, lng }) => {
+        setMyLocation({ lat, lng });
+        setCenter({ lat, lng });
+        setIsMyLocationMode(true);
+      })
+      .catch(() => {
+        // 권한 거부 등일 때는 기본 중심좌표 유지
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 드롭다운
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
+  // Kakao Map refs
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef([]);
@@ -126,12 +116,28 @@ function MapLayout() {
   const ignoreNextIdleRef = useRef(false);
 
   const myMarkerRef = useRef(null);
-  const myLocationRef = useRef(null);
-  const centerRef = useRef({ lat: 37.5506, lng: 126.9258 });
+  const myLocationRef = useRef(myLocation);
+  const centerRef = useRef(center);
+
+  useEffect(() => {
+    myLocationRef.current = myLocation;
+  }, [myLocation]);
+
+  useEffect(() => {
+    centerRef.current = center;
+  }, [center]);
+
+  // ✅ map idle에서 최신 모드 값을 쓰기 위해 ref로 미러링
+  const isMyLocationModeRef = useRef(false);
+  useEffect(() => {
+    isMyLocationModeRef.current = isMyLocationMode;
+  }, [isMyLocationMode]);
+
+  // ✅ 맵 준비 신호
+  const [mapReadyVersion, setMapReadyVersion] = useState(0);
 
   const selectedLabel =
-    distanceOptions.find((o) => o.km === distanceKm)?.label ??
-    `${distanceKm}km`;
+    distanceOptions.find((o) => o.km === distanceKm)?.label ?? `${distanceKm}km`;
 
   function clearMyLocationMarker() {
     if (myMarkerRef.current) {
@@ -147,6 +153,13 @@ function MapLayout() {
     }
   }
 
+  function clearMarkers() {
+    markersRef.current.forEach((m) => m.setMap(null));
+    markersRef.current = [];
+  }
+
+  // open_status_logs 갱신은 CafeStatusProvider에서 전역으로 처리
+
   function drawMyLocationMarker(lat, lng) {
     const kakao = window.kakao;
     const map = mapRef.current;
@@ -158,11 +171,7 @@ function MapLayout() {
 
     const imageSize = new kakao.maps.Size(36, 36);
     const imageOption = { offset: new kakao.maps.Point(18, 36) };
-    const markerImage = new kakao.maps.MarkerImage(
-      myLocationIcon,
-      imageSize,
-      imageOption
-    );
+    const markerImage = new kakao.maps.MarkerImage(myLocationIcon, imageSize, imageOption);
 
     myMarkerRef.current = new kakao.maps.Marker({
       position,
@@ -173,30 +182,21 @@ function MapLayout() {
     myMarkerRef.current.setMap(map);
   }
 
-  function clearMarkers() {
-    markersRef.current.forEach((m) => m.setMap(null));
-    markersRef.current = [];
-  }
-
   function drawRadiusCircle(km) {
     const kakao = window.kakao;
     const map = mapRef.current;
     if (!kakao?.maps || !map) return;
 
-    if (!isMyLocationMode) {
+    if (!isMyLocationModeRef.current) {
       clearCircle();
       return;
     }
 
     const radiusM = Math.round(km * 1000);
-
     clearCircle();
 
     circleRef.current = new kakao.maps.Circle({
-      center: new kakao.maps.LatLng(
-        centerRef.current.lat,
-        centerRef.current.lng
-      ),
+      center: new kakao.maps.LatLng(centerRef.current.lat, centerRef.current.lng),
       radius: radiusM,
       strokeWeight: 2,
       strokeColor: PINK,
@@ -219,12 +219,7 @@ function MapLayout() {
     list.forEach((p) => {
       const imageSize = new kakao.maps.Size(18, 22);
       const imageOption = { offset: new kakao.maps.Point(11, 22) };
-
-      const markerImage = new kakao.maps.MarkerImage(
-        cafeMarkerIcon,
-        imageSize,
-        imageOption
-      );
+      const markerImage = new kakao.maps.MarkerImage(cafeMarkerIcon, imageSize, imageOption);
 
       const marker = new kakao.maps.Marker({
         position: new kakao.maps.LatLng(p.lat, p.lng),
@@ -240,9 +235,7 @@ function MapLayout() {
         )}</div>`,
       });
 
-      kakao.maps.event.addListener(marker, "mouseover", () =>
-        iw.open(map, marker)
-      );
+      kakao.maps.event.addListener(marker, "mouseover", () => iw.open(map, marker));
       kakao.maps.event.addListener(marker, "mouseout", () => iw.close());
 
       markersRef.current.push(marker);
@@ -261,6 +254,7 @@ function MapLayout() {
   async function loadPlacesFromBackendByBrowser(km) {
     const radius_m = Math.round(km * 1000);
 
+    // ✅ 브라우저 위치 수집(서버에도 필요)
     const { lat, lng, result } = await collectPlacesByBrowser({ km });
     console.log("collect 성공:", result);
 
@@ -277,11 +271,13 @@ function MapLayout() {
       distM: haversineMeters(lat, lng, Number(p.lat), Number(p.lng)),
     }));
 
+    // 원본은 거리순 유지 (안정적)
     normalized.sort((a, b) => a.distM - b.distM);
 
     setPlaces(normalized);
     drawCafeMarkers(normalized);
 
+    // 지도/마커/원 업데이트
     if (mapRef.current && window.kakao?.maps) {
       mapRef.current.panTo(new window.kakao.maps.LatLng(lat, lng));
       centerRef.current = { lat, lng };
@@ -289,11 +285,10 @@ function MapLayout() {
       drawRadiusCircle(km);
     }
 
-    // 리스트를 불러온 직후 warmup을 "가끔만" 한번 돌려두면
-    // 상세 들어갈 때 logs 매칭이 더 빨라질 수 있음
-    warmupStatusIfNeeded().catch(() => {});
+ 
   }
 
+  // 드롭다운 외부 클릭 닫기
   useEffect(() => {
     const onDocClick = (e) => {
       if (!dropdownRef.current) return;
@@ -303,6 +298,7 @@ function MapLayout() {
     return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 
+  // ✅ 지도 init은 1번만
   useEffect(() => {
     let cancelled = false;
 
@@ -318,19 +314,21 @@ function MapLayout() {
       const kakao = window.kakao;
 
       const map = new kakao.maps.Map(mapContainerRef.current, {
-        center: new kakao.maps.LatLng(
-          centerRef.current.lat,
-          centerRef.current.lng
-        ),
+        center: new kakao.maps.LatLng(centerRef.current.lat, centerRef.current.lng),
         level: 3,
       });
+
       mapRef.current = map;
+      setMapReadyVersion((v) => v + 1);
 
       kakao.maps.event.addListener(map, "idle", () => {
         const c = map.getCenter();
-        centerRef.current = { lat: c.getLat(), lng: c.getLng() };
+        const nextCenter = { lat: c.getLat(), lng: c.getLng() };
+        centerRef.current = nextCenter;
+        setCenter(nextCenter);
 
-        if (!isMyLocationMode) return;
+        // 내 위치 모드가 아닐 땐 아무것도 안 함
+        if (!isMyLocationModeRef.current) return;
 
         if (ignoreNextIdleRef.current) {
           ignoreNextIdleRef.current = false;
@@ -340,6 +338,7 @@ function MapLayout() {
         const my = myLocationRef.current;
         if (my) {
           const dist = haversineMeters(my.lat, my.lng, c.getLat(), c.getLng());
+          // 내 위치 기준에서 사용자가 지도를 너무 움직이면 내 위치 모드 해제
           if (dist > 80) setIsMyLocationMode(false);
         }
       });
@@ -349,11 +348,54 @@ function MapLayout() {
     return () => {
       cancelled = true;
     };
-  }, [isMyLocationMode]);
+  }, []);
 
+  // ✅ 페이지 들어오자마자: 내 위치 자동 ON (이미 값이 있으면 재요청 안 함)
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        if (myLocationRef.current) return;
+        const { lat, lng } = await getMyLocationFallback();
+        if (cancelled) return;
+
+        const my = { lat, lng };
+        myLocationRef.current = my;
+        centerRef.current = my;
+        setMyLocation(my);
+        setCenter(my);
+        setIsMyLocationMode(true);
+      } catch (e) {
+        console.log("초기 내 위치 자동 전환 실패:", e?.message || e);
+        // 실패하면 그냥 기본 좌표 유지
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // ✅ 맵이 늦게 뜨는 경우 보정
+  useEffect(() => {
+    const kakao = window.kakao;
+    const map = mapRef.current;
+    const my = myLocationRef.current;
+
+    if (!kakao?.maps || !map) return;
+    if (!isMyLocationMode) return;
+    if (!my) return;
+
+    map.panTo(new kakao.maps.LatLng(my.lat, my.lng));
+    drawMyLocationMarker(my.lat, my.lng);
+    drawRadiusCircle(distanceKm);
+  }, [mapReadyVersion, isMyLocationMode, distanceKm]);
+
+  // ✅ 내 위치 모드 켜질 때만 장소 로드
   useEffect(() => {
     if (!isMyLocationMode) {
-      myLocationRef.current = null;
+      // OFF: 지도 표시만 끄고, 데이터(places)는 유지
       clearMyLocationMarker();
       clearCircle();
       setSelectedPlace(null);
@@ -362,13 +404,12 @@ function MapLayout() {
 
     loadPlacesFromBackendByBrowser(distanceKm).catch((e) => {
       console.error(e);
-      alert(
-        "collect/places 요청에 실패했습니다. 콘솔/네트워크를 확인해주세요."
-      );
+      alert("collect/places 요청에 실패했습니다. 콘솔/네트워크를 확인해주세요.");
       setIsMyLocationMode(false);
     });
   }, [isMyLocationMode]);
 
+  // ✅ 거리 변경 시(내 위치 모드일 때만) 재로드
   useEffect(() => {
     if (!isMyLocationMode) return;
 
@@ -376,9 +417,10 @@ function MapLayout() {
       console.error(e);
       alert("거리 변경 후 요청에 실패했습니다.");
     });
-  }, [distanceKm]);
+  }, [distanceKm, isMyLocationMode]);
 
   async function handleGoMyLocation() {
+    // 토글 OFF
     if (isMyLocationMode) {
       setIsMyLocationMode(false);
 
@@ -389,15 +431,17 @@ function MapLayout() {
       return;
     }
 
+    // 토글 ON
     try {
       const { lat, lng } = await getMyLocationFallback();
-      myLocationRef.current = { lat, lng };
-      centerRef.current = { lat, lng };
+      const my = { lat, lng };
+      myLocationRef.current = my;
+      centerRef.current = my;
+      setMyLocation(my);
+      setCenter(my);
       setIsMyLocationMode(true);
     } catch {
-      alert(
-        "위치 정보를 가져올 수 없습니다. 브라우저 위치 권한을 확인해주세요."
-      );
+      alert("위치 정보를 가져올 수 없습니다. 브라우저 위치 권한을 확인해주세요.");
     }
   }
 
@@ -408,13 +452,38 @@ function MapLayout() {
         return;
       }
       navigator.geolocation.getCurrentPosition(
-        (pos) =>
-          resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
         reject,
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     });
   }
+
+  // ✅ 남은시간 정렬 점수:
+  // - minutes_to_close 숫자면 그대로(큰 값 우선)
+  // - 영업중인데 시간정보 없음: 0점(정보 있는 애들 아래, 종료/정보없음 위)
+  // - 영업종료/정보없음: 아주 낮은 점수로 맨 아래
+  function closeScore(place) {
+    const s = openStatusMap[String(place.kakaoId)];
+    if (typeof s?.minutes_to_close === "number") return s.minutes_to_close;
+    if (s?.is_open_now === true) return 0;
+    return -1e9;
+  }
+
+  // ✅ 내 위치 OFF여도 남은시간순 정렬 유지 (동점이면 거리순)
+  const sortedPlaces = useMemo(() => {
+    const arr = [...places];
+
+    arr.sort((a, b) => {
+      const sa = closeScore(a);
+      const sb = closeScore(b);
+
+      if (sa === sb) return a.distM - b.distM; // 안정화
+      return sb - sa; // 남은시간 큰 순
+    });
+
+    return arr;
+  }, [places, openStatusVersion]);
 
   return (
     <div style={styles.page}>
@@ -490,7 +559,8 @@ function MapLayout() {
           />
         ) : (
           <RightPanel
-            places={places}
+            places={sortedPlaces}
+            openStatusMap={openStatusMap}
             onRoute={(p) => openKakaoRouteToPlace(p)}
             onOpenDetail={(p) => {
               setSelectedPlace(p);
@@ -503,122 +573,124 @@ function MapLayout() {
   );
 }
 
-function RightPanel({ places, onOpenDetail, onRoute }) {
+function RightPanel({ places, openStatusMap, onOpenDetail, onRoute }) {
   return (
     <div style={styles.rightInner}>
       {places.length === 0 ? (
-        <div style={styles.emptyBox}>내 위치를 키면 주변 카페가 표시돼요.</div>
+        <div style={styles.emptyBox}>
+          내 위치 권한을 허용하면 주변 카페가 자동으로 표시돼요.
+        </div>
       ) : (
-        places.map((p) => (
-          <div key={p.id} style={styles.card}>
-            <div style={styles.cardRow}>
-              <div style={styles.thumbnail} aria-hidden="true">
-                카페사진
-              </div>
+        places.map((p) => {
+          const s = openStatusMap?.[String(p.kakaoId)];
+          const mtc = typeof s?.minutes_to_close === "number" ? s.minutes_to_close : null;
 
-              <div style={styles.cardBody}>
-                <div style={styles.cardTitle}>{p.name}</div>
-                <div style={styles.cardMeta}>
-                  거리 {formatDistance(p.distM)}
+          let remainLine = "영업 정보 없음";
+          if (s?.is_open_now === true && mtc != null) {
+            const h = Math.floor(mtc / 60);
+            const m = mtc % 60;
+            remainLine = `종료까지 ${h}시간 ${m}분`;
+          } else if (s?.is_open_now === true) {
+            remainLine = "종료시간 정보 없음";
+          } else if (s?.is_open_now === false) {
+            remainLine = "영업 종료";
+          }
+
+          return (
+            <div key={p.id} style={styles.card}>
+              <div style={styles.cardRow}>
+                <div style={styles.thumbnail} aria-hidden="true">
+                  카페사진
                 </div>
-              </div>
 
-              <div style={styles.cardActions}>
-                <button
-                  type="button"
-                  style={styles.starBtn}
-                  title="즐겨찾기(미구현)"
-                >
-                  ☆
-                </button>
+                <div style={styles.cardBody}>
+                  <div style={styles.cardTitle}>{p.name}</div>
+                  <div style={styles.cardMeta}>
+                    <div>거리 {formatDistance(p.distM)}</div>
+                    <div>{remainLine}</div>
+                  </div>
+                </div>
 
-                <button
-                  type="button"
-                  style={styles.routeBtn}
-                  onClick={() => onRoute(p)}
-                >
-                  길찾기
-                </button>
+                <div style={styles.cardTopRight}>
+                  <button type="button" style={styles.routeBtn} onClick={() => onRoute(p)}>
+                    길찾기
+                  </button>
 
-                <button
-                  type="button"
-                  style={styles.detailBtn}
-                  onClick={() => onOpenDetail(p)}
-                >
-                  상세보기
+                  <button type="button" style={styles.starBtn} title="즐겨찾기(미구현)">
+                    ☆
+                  </button>
+                </div>
+
+
+
+                <button type="button" style={styles.detailBtn} onClick={() => onOpenDetail(p)}>
+                  상세정보
                 </button>
+              
               </div>
             </div>
-          </div>
-        ))
+          );
+        })
       )}
     </div>
   );
 }
+
 
 function PlaceDetailPanel({ place, onBack, onCenterTo, onRoute }) {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(null);
   const [error, setError] = useState("");
 
+  const { openStatusMap, version, warmupIfNeeded } = useCafeStatus();
+
+
+  useEffect(() => {
+    if (!place?.kakaoId) return;
+    const s = openStatusMap[String(place.kakaoId)];
+    if (s) setStatus(s); // ✅ 있을 때만 갱신 (없으면 기존 status 유지)
+  }, [place?.kakaoId, openStatusMap, version]);
+
   useEffect(() => {
     let cancelled = false;
 
-    async function run() {
+    (async () => {
       if (!place?.kakaoId) return;
 
       setLoading(true);
       setError("");
-      setStatus(null);
 
       try {
-        // 0) 먼저 logs에서 "이미 있는 값" 빠르게 가져오기
-        const cached = await fetchOpenStatusByKakaoId(place.kakaoId).catch(
-          () => null
-        );
+        // 일단 빠르게 단건 조회(있으면 즉시)
+        const cached = await fetchOpenStatusByKakaoId(place.kakaoId).catch(() => null);
         if (cancelled) return;
+
         if (cached) {
           setStatus(cached);
-          setLoading(false);
-          return; // 이미 있으면 여기서 끝
+          return;
         }
 
-        // 1) 없으면: 상세 수집 + 상태 최신화
-        await collectDetails({}).catch(() => {});
-        if (cancelled) return;
-
-        await refreshStatus({}).catch(() => {});
-        if (cancelled) return;
-
-        // 2) 최신화 끝난 후 logs를 다시 조회해서 매칭
-        const fresh = await fetchOpenStatusByKakaoId(place.kakaoId).catch(
-          () => null
-        );
-        if (cancelled) return;
-
-        setStatus(fresh);
+      
+        warmupIfNeeded?.(); // 쿨다운 걸린 전역 워밍업(내부에서 collect_details/refresh_status)
+     
       } catch (e) {
-        if (!cancelled)
-          setError(e?.message || "상세 정보를 불러오지 못했습니다.");
+        if (!cancelled) setError(e?.message || "영업 정보를 불러오지 못했습니다.");
       } finally {
         if (!cancelled) setLoading(false);
       }
-    }
+    })();
 
-    run();
     return () => {
       cancelled = true;
     };
-  }, [place?.kakaoId]);
+  }, [place?.kakaoId, warmupIfNeeded]);
 
   const isOpenNow = status?.is_open_now;
   const note = status?.today_status_note ?? null;
   const openTime = status?.today_open_time ?? null;
   const closeTime = status?.today_close_time ?? null;
   const minutesToClose =
-    typeof status?.minutes_to_close === "number"
-      ? status.minutes_to_close
-      : null;
+    typeof status?.minutes_to_close === "number" ? status.minutes_to_close : null;
 
   const remainText =
     isOpenNow === true && minutesToClose != null
@@ -628,22 +700,13 @@ function PlaceDetailPanel({ place, onBack, onCenterTo, onRoute }) {
   return (
     <div style={styles.detailPanel}>
       <div style={styles.detailTopBar}>
-        <button
-          type="button"
-          onClick={onBack}
-          style={styles.backBtn}
-          aria-label="뒤로가기"
-        >
+        <button type="button" onClick={onBack} style={styles.backBtn} aria-label="뒤로가기">
           ←
         </button>
 
         <div style={styles.detailTopTitleRow}>
           <div style={styles.detailTitle}>{place.name}</div>
-          <button
-            type="button"
-            style={styles.detailStar}
-            title="즐겨찾기(미구현)"
-          >
+          <button type="button" style={styles.detailStar} title="즐겨찾기(미구현)">
             ☆
           </button>
         </div>
@@ -654,15 +717,9 @@ function PlaceDetailPanel({ place, onBack, onCenterTo, onRoute }) {
       </div>
 
       <div style={styles.detailMetaRow2}>
+        <div style={styles.detailMetaItem2}>거리 {formatDistance(place.distM)}</div>
         <div style={styles.detailMetaItem2}>
-          거리 {formatDistance(place.distM)}
-        </div>
-        <div style={styles.detailMetaItem2}>
-          {loading
-            ? "영업 정보 불러오는 중..."
-            : error
-            ? "영업 정보 오류"
-            : "영업 정보"}
+          {loading ? "영업 정보 불러오는 중..." : error ? "영업 정보 오류" : "영업 정보"}
         </div>
       </div>
 
@@ -672,9 +729,7 @@ function PlaceDetailPanel({ place, onBack, onCenterTo, onRoute }) {
       </div>
 
       <div style={styles.detailInfo2}>
-        <div style={styles.detailInfoRow2}>
-          주소: {place.address || "주소 정보 없음"}
-        </div>
+        <div style={styles.detailInfoRow2}>주소: {place.address || "주소 정보 없음"}</div>
 
         <div style={styles.detailInfoRow2}>
           현재 상태:{" "}
@@ -704,22 +759,11 @@ function PlaceDetailPanel({ place, onBack, onCenterTo, onRoute }) {
 
         <div style={styles.detailInfoRow2}>
           종료까지{" "}
-          {loading
-            ? "불러오는 중..."
-            : error
-            ? "-"
-            : remainText
-            ? remainText
-            : "-"}
+          {loading ? "불러오는 중..." : error ? "-" : remainText ? remainText : "-"}
         </div>
 
         {place.url ? (
-          <a
-            href={place.url}
-            target="_blank"
-            rel="noreferrer"
-            style={styles.kakaoLink}
-          >
+          <a href={place.url} target="_blank" rel="noreferrer" style={styles.kakaoLink}>
             카카오 장소페이지 열기
           </a>
         ) : null}
@@ -727,11 +771,7 @@ function PlaceDetailPanel({ place, onBack, onCenterTo, onRoute }) {
 
       <div style={styles.detailReviewList2}>
         {Array.from({ length: 8 }).map((_, i) => (
-          <input
-            key={i}
-            style={styles.detailReviewInput2}
-            placeholder="방문자 리뷰"
-          />
+          <input key={i} style={styles.detailReviewInput2} placeholder="방문자 리뷰" />
         ))}
       </div>
 
@@ -774,7 +814,7 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
-/* styles는 네 기존 그대로 유지 */
+
 
 /* styles */
 const PINK = "#84DEEE";
@@ -900,7 +940,7 @@ const styles = {
   },
 
   rightInner: {
-    height: "100%",
+    height: "100%", 
     overflowY: "auto",
     padding: 12,
     display: "flex",
@@ -924,8 +964,9 @@ const styles = {
     boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
   },
   cardRow: {
+    position: "relative", 
     display: "grid",
-    gridTemplateColumns: "80px 1fr 84px",
+    gridTemplateColumns: "80px 1fr 84px ",
     gap: 10,
     alignItems: "start",
   },
@@ -948,8 +989,19 @@ const styles = {
     flexDirection: "column",
     alignItems: "flex-start",
     textAlign: "left",
+    gap: 4,
   },
+  cardTopRight: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    display: "flex",
+    alignItems: "center",
+    gap: 5,
+  },          
   cardTitle: {
+     width: "100%",          // ✅ 필수
+    minWidth: 0,    
     fontSize: 14,
     fontWeight: 800,
     color: "#222",
@@ -961,12 +1013,6 @@ const styles = {
   },
   cardMeta: { fontSize: 12, color: "#666", lineHeight: 1.5 },
 
-  cardActions: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "flex-end",
-    gap: 8,
-  },
 
   routeBtn: {
     border: "none",
@@ -974,7 +1020,8 @@ const styles = {
     color: "#fff",
     fontWeight: 800,
     fontSize: 12,
-    padding: "8px 10px",
+    height: 28,
+    padding: "0px 12px",
     borderRadius: 18,
     cursor: "pointer",
   },
@@ -984,23 +1031,23 @@ const styles = {
     background: "transparent",
     color: PINK,
     cursor: "pointer",
-    fontSize: 22,
+    fontSize: 20,
     lineHeight: 1,
     padding: 0,
   },
 
   detailBtn: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    textDecoration: "none",
-    border: `1px solid ${PINK}`,
-    background: "#fff",
-    color: PINK,
-    fontWeight: 800,
+    position: "absolute",
+    right: 0,
+    bottom: 0,
+    height: 28,
+    padding: "0 8px",
+    borderRadius: 999,
+    border: "1px solid #D2D2D2",
+    background: "transparent",
+    color: "#9A9A9A",
+    fontWeight: 900,
     fontSize: 12,
-    padding: "8px 10px",
-    borderRadius: 18,
     cursor: "pointer",
   },
 
