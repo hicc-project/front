@@ -1,51 +1,86 @@
-// src/pages/Open24.jsx
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { openKakaoRouteToPlace } from "../../../utils/cafeApi";
+import { useOpen24State } from "../../../providers/Open24StateProvider";
 
-export default function Open24Pc() {
-  const cafes = useMemo(
-    () => [
-      {
-        id: "c1",
-        name: "카페이름",
-        distanceKm: 0.0,
-        hours: "00:00 - 00:00",
-        reviews: "0,000개",
-        rating: 5.0,
-        images: ["카페사진1", "카페사진2", "카페사진3"],
-      },
-      {
-        id: "c2",
-        name: "카페이름",
-        distanceKm: 0.0,
-        hours: "00:00 - 00:00",
-        reviews: "0,000개",
-        rating: 0,
-        images: [],
-      },
-      {
-        id: "c3",
-        name: "카페이름",
-        distanceKm: 0.0,
-        hours: "00:00 - 00:00",
-        reviews: "0,000개",
-        rating: 0,
-        images: [],
-      },
-      {
-        id: "c4",
-        name: "카페이름",
-        distanceKm: 0.0,
-        hours: "00:00 - 00:00",
-        reviews: "0,000개",
-        rating: 0,
-        images: [],
-      },
-    ],
-    []
+/* -------------------- helpers -------------------- */
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const toRad = (v) => (v * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+function formatReviews(v) {
+  if (v == null) return "0,000개";
+  if (typeof v === "string") return v.includes("개") ? v : `${v}개`;
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "0,000개";
+  return `${n.toLocaleString("ko-KR")}개`;
+}
+
+function normalizeCafe(raw, myLoc) {
+  const id = String(
+    raw.kakaoId ??
+      raw.kakao_id ??
+      raw.id ??
+      raw.place_id ??
+      raw.placeId ??
+      raw.pk ??
+      `${raw.name ?? raw.place_name ?? "cafe"}-${raw.lat ?? raw.y}-${raw.lng ?? raw.x}`
   );
 
+  const name = raw.name ?? raw.place_name ?? raw.cafe_name ?? raw.title ?? "카페이름";
+
+  const lat = Number(raw.lat ?? raw.latitude ?? raw.y);
+  const lng = Number(raw.lng ?? raw.longitude ?? raw.x);
+
+  const distM =
+    typeof raw.distM === "number"
+      ? raw.distM
+      : Number(raw.distance_m ?? raw.dist_m ?? raw.distance ?? raw.dist);
+
+  let distanceKm = 9999;
+  if (Number.isFinite(distM)) distanceKm = distM / 1000;
+  else if (myLoc && Number.isFinite(lat) && Number.isFinite(lng)) {
+    distanceKm = haversineKm(myLoc.lat, myLoc.lng, lat, lng);
+  }
+
+  const openT = raw.today_open_time ?? raw.todayOpenTime;
+  const closeT = raw.today_close_time ?? raw.todayCloseTime;
+  const hours = openT && closeT ? `${openT} - ${closeT}` : "00:00 - 00:00";
+
+  const ratingNum = Number(raw.rating ?? raw.star ?? raw.score ?? raw.rate);
+  const rating = Number.isFinite(ratingNum) ? ratingNum : 0;
+  const reviews = formatReviews(raw.reviews ?? raw.review_count ?? raw.reviewCount);
+
+  const imagesArr =
+    raw.images ??
+    raw.imageUrls ??
+    raw.image_urls ??
+    (raw.image_url ? [raw.image_url] : null) ??
+    [];
+
+  const images =
+    Array.isArray(imagesArr) && imagesArr.length ? imagesArr : ["카페사진1", "카페사진2", "카페사진3"];
+
+  return { id, name, lat, lng, distanceKm, hours, reviews, rating, images };
+}
+
+/* -------------------- component -------------------- */
+export default function Open24Pc() {
+  const { loading, errMsg, myLoc, cafesRaw, loadOpen24 } = useOpen24State();
+
+  // ✅ 페이지 진입 시 로드 (TTL이면 Provider가 네트워크 스킵)
+  useEffect(() => {
+    loadOpen24();
+  }, [loadOpen24]);
+
+  // 즐겨찾기(현재는 페이지 로컬. 원하면 FavoritesProvider와 연결 가능)
   const [favorites, setFavorites] = useState(() => new Set());
-  const nearest = cafes[0];
 
   const toggleFavorite = (id) => {
     setFavorites((prev) => {
@@ -56,54 +91,77 @@ export default function Open24Pc() {
     });
   };
 
+  const { nearest, rest } = useMemo(() => {
+    const normalized = cafesRaw.map((r) => normalizeCafe(r, myLoc));
+    normalized.sort((a, b) => (a.distanceKm ?? 9999) - (b.distanceKm ?? 9999));
+    return { nearest: normalized[0] ?? null, rest: normalized.slice(1) };
+  }, [cafesRaw, myLoc]);
+
   return (
     <div style={styles.page}>
-      {/* 상단 Hero */}
+      {/* Hero */}
       <header style={styles.hero}>
         <div style={styles.heroInner}>
           <div style={styles.heroTitle}>24-hour cafe</div>
           <div style={styles.heroSub}>내 근처에 24시간 동안 운영하는 카페는?</div>
+
+          {/* ✅ 너 UI에서 쓰던 새로고침 버튼 느낌 유지하려면 여기서 추가해도 됨 */}
+          <button type="button" style={styles.refreshBtn} onClick={() => loadOpen24({ force: true })}>
+            새로고침
+          </button>
         </div>
       </header>
 
-      {/* 하단 컨텐츠 */}
       <section style={styles.content}>
-        <div style={styles.grid}>
-          {/* 좌측: 대표 카드 */}
-          <div style={styles.left}>
-            <NearestCard
-              cafe={nearest}
-              isFav={favorites.has(nearest.id)}
-              onToggleFav={() => toggleFavorite(nearest.id)}
-            />
+        {loading ? (
+          <div style={styles.stateBox}>불러오는 중...</div>
+        ) : errMsg ? (
+          <div style={styles.stateBox}>
+            <div style={{ marginBottom: 10 }}>{errMsg}</div>
+            <button type="button" style={styles.stateBtn} onClick={() => loadOpen24({ force: true })}>
+              다시 시도
+            </button>
           </div>
+        ) : !nearest ? (
+          <div style={styles.stateBox}>근처 24시간 카페가 없어요.</div>
+        ) : (
+          <div style={styles.grid}>
+            {/* Left: nearest */}
+            <div style={styles.left}>
+              <NearestCard
+                cafe={nearest}
+                isFav={favorites.has(nearest.id)}
+                onToggleFav={() => toggleFavorite(nearest.id)}
+                onRoute={() => openKakaoRouteToPlace(nearest)}
+              />
+            </div>
 
-          {/* 우측: 리스트 */}
-          <div style={styles.right}>
-            <div style={styles.listWrap}>
-              {cafes.map((c) => (
-                <CafeRow
-                  key={c.id}
-                  cafe={c}
-                  isFav={favorites.has(c.id)}
-                  onToggleFav={() => toggleFavorite(c.id)}
-                />
-              ))}
+            {/* Right: list */}
+            <div style={styles.right}>
+              <div style={styles.listWrap}>
+                {rest.map((c) => (
+                  <CafeRow
+                    key={c.id}
+                    cafe={c}
+                    isFav={favorites.has(c.id)}
+                    onToggleFav={() => toggleFavorite(c.id)}
+                    onRoute={() => openKakaoRouteToPlace(c)}
+                  />
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </section>
     </div>
   );
 }
 
-/* -------------------- Components -------------------- */
+/* -------------------- UI components -------------------- */
 
-function NearestCard({ cafe, isFav, onToggleFav }) {
+function NearestCard({ cafe, isFav, onToggleFav, onRoute }) {
   const [idx, setIdx] = useState(0);
-  const images = cafe.images?.length
-    ? cafe.images
-    : ["카페사진1", "카페사진2", "카페사진3"];
+  const images = cafe.images?.length ? cafe.images : ["카페사진1", "카페사진2", "카페사진3"];
   const current = images[idx % images.length];
 
   return (
@@ -111,15 +169,23 @@ function NearestCard({ cafe, isFav, onToggleFav }) {
       <div style={styles.nearestTopRow}>
         <div style={styles.nearestTitleRow}>
           <div style={styles.nearestName}>{cafe.name}</div>
-          <button
-            type="button"
-            onClick={onToggleFav}
-            aria-label="즐겨찾기"
-            style={{ ...styles.favBtn, ...(isFav ? styles.favBtnActive : null) }}
-            title="즐겨찾기"
-          >
-            {isFav ? "★" : "☆"}
-          </button>
+
+          {/* ✅ 길찾기 + 즐겨찾기: 옆에 배치 */}
+          <div style={styles.topActions}>
+            <button type="button" style={styles.routeBtn} onClick={onRoute}>
+              길찾기
+            </button>
+
+            <button
+              type="button"
+              onClick={onToggleFav}
+              aria-label="즐겨찾기"
+              style={{ ...styles.favBtn, ...(isFav ? styles.favBtnActive : null) }}
+              title="즐겨찾기"
+            >
+              {isFav ? "★" : "☆"}
+            </button>
+          </div>
         </div>
 
         <div style={styles.nearestMetaRow}>
@@ -130,7 +196,7 @@ function NearestCard({ cafe, isFav, onToggleFav }) {
           </div>
 
           <div style={styles.metaRight}>
-            <div style={styles.metaText}>거리 {(cafe.distanceKm ?? 0).toFixed(1)} km</div>
+            <div style={styles.metaText}>거리 {(cafe.distanceKm ?? 0).toFixed(2)} km</div>
             <div style={styles.metaText}>영업시간 {cafe.hours}</div>
             <div style={styles.metaText}>리뷰 {cafe.reviews}</div>
           </div>
@@ -146,7 +212,7 @@ function NearestCard({ cafe, isFav, onToggleFav }) {
   );
 }
 
-function CafeRow({ cafe, isFav, onToggleFav }) {
+function CafeRow({ cafe, isFav, onToggleFav, onRoute }) {
   return (
     <div style={styles.rowCard}>
       <div style={styles.rowLeft}>
@@ -156,21 +222,28 @@ function CafeRow({ cafe, isFav, onToggleFav }) {
 
         <div style={styles.rowBody}>
           <div style={styles.rowName}>{cafe.name}</div>
-          <div style={styles.rowMeta}>거리 {(cafe.distanceKm ?? 0).toFixed(1)} km</div>
+          <div style={styles.rowMeta}>거리 {(cafe.distanceKm ?? 0).toFixed(2)} km</div>
           <div style={styles.rowMeta}>영업시간 {cafe.hours}</div>
           <div style={styles.rowMeta}>리뷰 {cafe.reviews}</div>
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={onToggleFav}
-        aria-label="즐겨찾기"
-        style={{ ...styles.rowFav, ...(isFav ? styles.rowFavActive : null) }}
-        title="즐겨찾기"
-      >
-        {isFav ? "★" : "☆"}
-      </button>
+      {/* ✅ 리스트 쪽도 길찾기 + 별을 함께 */}
+      <div style={styles.rowActions}>
+        <button type="button" style={styles.routeBtnSmall} onClick={onRoute}>
+          길찾기
+        </button>
+
+        <button
+          type="button"
+          onClick={onToggleFav}
+          aria-label="즐겨찾기"
+          style={{ ...styles.rowFav, ...(isFav ? styles.rowFavActive : null) }}
+          title="즐겨찾기"
+        >
+          {isFav ? "★" : "☆"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -194,7 +267,7 @@ function Stars({ value }) {
   return <span style={styles.stars}>{stars}</span>;
 }
 
-/* -------------------- Styles -------------------- */
+/* -------------------- styles (기존 스타일 유지 + 버튼만 추가) -------------------- */
 
 const PINK = "#84DEEE";
 const PINK_DARK = "#8acfdbff";
@@ -202,8 +275,8 @@ const PINK_DARK = "#8acfdbff";
 const styles = {
   page: {
     width: "92vw",
-    height: "100%",          //  100vh → 100% (Layout이 높이 잡음)
-    minHeight: 0,            //  flex 자식 스크롤 필수
+    height: "100%",
+    minHeight: 0,
     overflow: "hidden",
     background: "#fff",
     display: "flex",
@@ -212,9 +285,8 @@ const styles = {
 
   hero: {
     height: 260,
-    flexShrink: 0,           //  위 영역이 줄어들지 않게
-    background:
-      "linear-gradient(180deg, #68D0E4 0%, #caebf1ff 60%, #FFFFFF 100%)",
+    flexShrink: 0,
+    background: "linear-gradient(180deg, #68D0E4 0%, #caebf1ff 60%, #FFFFFF 100%)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -227,26 +299,23 @@ const styles = {
     letterSpacing: -0.5,
     lineHeight: 1.05,
   },
-  heroSub: {
-    marginTop: 10,
-    fontSize: 18,
-    color: "#6B6B6B",
-    fontWeight: 500,
+  heroSub: { marginTop: 10, fontSize: 18, color: "#6B6B6B", fontWeight: 500 },
+
+  refreshBtn: {
+    textAlign: "left",  
+    marginTop: 14,
+    padding: "10px 18px",
+    borderRadius: 14,
+    border: `1px solid ${PINK}`,
+    background: "#fff",
+    cursor: "pointer",
+    fontWeight: 800,
+    color: "#4A4A4A",
   },
 
-  content: {
-    flex: 1,
-    overflow: "hidden",
-    padding: "18px 22px 22px 22px",
-  },
+  content: { flex: 1, overflow: "hidden", padding: "18px 22px 22px 22px" },
 
-  grid: {
-    height: "100%",
-    minHeight: 0,            
-    display: "grid",
-    gridTemplateColumns: "1.1fr 1fr",
-    gap: 24,
-  },
+  grid: { height: "100%", minHeight: 0, display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: 24 },
 
   left: {
     minWidth: 0,
@@ -273,13 +342,23 @@ const styles = {
 
   nearestTopRow: { display: "flex", flexDirection: "column", gap: 10 },
 
-  nearestTitleRow: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
+  nearestTitleRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 },
   nearestName: { fontSize: 28, fontWeight: 800, color: "#3F3F3F" },
+
+  // 길찾기+별 묶음
+  topActions: { display: "flex", gap: 10, alignItems: "center" },
+
+  routeBtn: {
+    border: "none",
+    background: PINK,
+    color: "#fff",
+    fontWeight: 900,
+    fontSize: 12,
+    height: 34,
+    padding: "0 14px",
+    borderRadius: 18,
+    cursor: "pointer",
+  },
 
   favBtn: {
     width: 40,
@@ -294,31 +373,15 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
   },
-  favBtnActive: {
-    background: PINK,
-    color: "#fff",
-    border: `1px solid ${PINK_DARK}`,
-  },
+  favBtnActive: { background: PINK, color: "#fff", border: `1px solid ${PINK_DARK}` },
 
-  nearestMetaRow: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 12,
-    alignItems: "start",
-  },
-
+  nearestMetaRow: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, alignItems: "start" },
   ratingRow: { display: "flex", alignItems: "center", gap: 8 },
   ratingLabel: { fontSize: 14, color: "#5F5F5F", fontWeight: 700 },
   stars: { color: PINK, fontSize: 18, letterSpacing: 1.2 },
   ratingValue: { fontSize: 14, color: "#5F5F5F", fontWeight: 700 },
 
-  metaRight: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
-    alignItems: "flex-end",
-    
-  },
+  metaRight: { display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" },
   metaText: { fontSize: 13, color: "#7A7A7A", fontWeight: 600 },
 
   photoRow: {
@@ -340,21 +403,13 @@ const styles = {
     fontWeight: 800,
     cursor: "pointer",
   },
-  photoTileActive: {
-    background: "#CFCFCF",
-    outline: `3px solid ${PINK}`,
-  },
+  photoTileActive: { background: "#CFCFCF", outline: `3px solid ${PINK}` },
 
-  right: {
-    minWidth: 0,
-    minHeight: 0,           
-    display: "flex",
-    flexDirection: "column",
-  },
+  right: { minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" },
 
   listWrap: {
-    flex: 1,                 
-    minHeight: 0,            
+    flex: 1,
+    minHeight: 0,
     overflowY: "auto",
     paddingRight: 6,
     display: "flex",
@@ -388,16 +443,24 @@ const styles = {
   },
   thumbText: { fontSize: 12, color: "#D1D1D1", fontWeight: 800 },
 
-  rowBody: { 
-    minWidth: 0, 
-    display: "flex", 
-    flexDirection: "column", 
-    gap: 6,
-    alignItems: "flex-start", 
-    textAlign: "left", 
-  },
+  rowBody: { minWidth: 0, display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-start", textAlign: "left" },
   rowName: { fontSize: 18, fontWeight: 800, color: "#4A4A4A" },
   rowMeta: { fontSize: 13, color: "#7A7A7A", fontWeight: 600 },
+
+  // ✅ 리스트 오른쪽 액션 묶음
+  rowActions: { display: "flex", gap: 10, alignItems: "center" },
+
+  routeBtnSmall: {
+    border: "none",
+    background: PINK,
+    color: "#fff",
+    fontWeight: 900,
+    fontSize: 12,
+    height: 30,
+    padding: "0 12px",
+    borderRadius: 18,
+    cursor: "pointer",
+  },
 
   rowFav: {
     width: 36,
@@ -413,4 +476,28 @@ const styles = {
     justifyContent: "center",
   },
   rowFavActive: { color: PINK_DARK },
+
+  stateBox: {
+    height: "100%",
+    borderRadius: 18,
+    border: "1px solid #EAEAEA",
+    background: "#fff",
+    padding: 18,
+    color: "#4A4A4A",
+    fontWeight: 700,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    flexDirection: "column",
+  },
+  stateBtn: {
+    padding: "10px 14px",
+    borderRadius: 12,
+    border: `1px solid ${PINK}`,
+    background: "#fff",
+    cursor: "pointer",
+    fontWeight: 800,
+    color: "#4A4A4A",
+  },
 };

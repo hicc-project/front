@@ -217,3 +217,30 @@ export function openKakaoRouteToPlace(place) {
     () => alert("위치 정보를 가져올 수 없습니다.")
   );
 }
+
+//  10) 24H cafes 
+export async function fetch24hCafes({ lat, lng, radius_m } = {}) {
+  const qs = new URLSearchParams();
+  if (typeof lat === "number") qs.set("lat", String(lat));
+  if (typeof lng === "number") qs.set("lng", String(lng));
+  if (typeof radius_m === "number") qs.set("radius", String(radius_m));
+
+  const query = qs.toString();
+  const path = query ? `/api/cafes_24h/?${query}` : "/api/cafes_24h/";
+
+  const data = await request(path, { method: "GET" });
+
+  if (Array.isArray(data)) return data;
+
+
+  const candidate =
+    data?.results ??
+    data?.cafes ??
+    data?.cafe_list ??
+    data?.data ??
+    data?.items ??
+    data?.rows ??
+    data?.cafes_24h;
+
+  return Array.isArray(candidate) ? candidate : [];
+}
