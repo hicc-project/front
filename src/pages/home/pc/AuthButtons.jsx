@@ -6,7 +6,7 @@ export default function AuthButtons() {
   const [isAuthed, setIsAuthed] = useState(() => {
     return !!localStorage.getItem("accessToken");
   });
-
+  const [userId, setUserId] = useState("");
   const [modal, setModal] = useState(null); // null | "login" | "signup"
 
   function openLogin() {
@@ -24,6 +24,7 @@ export default function AuthButtons() {
   function handleLogout() {
     localStorage.removeItem("accessToken");
     setIsAuthed(false);
+    setUserId("");
   }
 
   // ESC로 닫기
@@ -53,7 +54,7 @@ export default function AuthButtons() {
   
         .auth-modal__panel{
           position: relative;
-          width: 420px;
+          wusernameth: 420px;
           max-width: calc(100vw - 32px);
           margin: 90px auto 0;
           background: #FFFFFF;
@@ -171,7 +172,6 @@ export default function AuthButtons() {
           font-size: 13px;
         }
       `}</style>
-
       {/* 기존 JSX 그대로 */}
       {!isAuthed ? (
         <div className="auth-actions">
@@ -184,7 +184,10 @@ export default function AuthButtons() {
         </div>
       ) : (
         <div className="auth-actions">
-          <button type="button" onClick={handleLogout}>
+          <span style={{ color: "#fff", marginRight: "15px", fontSize: 13 }}>
+            {userId}님 환영합니다.
+          </span>
+          <button type="button" className="logout" onClick={handleLogout}>
             로그아웃
           </button>
         </div>
@@ -193,8 +196,9 @@ export default function AuthButtons() {
       {modal === "login" && (
         <AuthModal title="로그인" onClose={closeModal}>
           <LoginForm
-            onSuccess={(token) => {
+            onSuccess={(token, username) => {
               localStorage.setItem("accessToken", token);
+              setUserId(username);
               setIsAuthed(true);
               closeModal();
             }}
@@ -204,7 +208,12 @@ export default function AuthButtons() {
 
       {modal === "signup" && (
         <AuthModal title="회원가입" onClose={closeModal}>
-          <SignupForm />
+          <SignupForm
+            onGoLogin={() => {
+              closeModal();
+              openLogin(); // 또는 setModal("login")
+            }}
+          />
         </AuthModal>
       )}
     </>
@@ -230,11 +239,11 @@ function AuthModal({ title, onClose, children }) {
   );
 }
 
-/** 로그인 폼: /api/auth/login/ 연동 */
-function LoginForm({ onSuccess, onGoSignup }) {
-  const [email, setEmail] = useState("");
+/** 로그인 폼: /api/auth/login/ 연동 (성공 시 토큰 저장 + 로그인 상태 전환) */
+function LoginForm({ onSuccess }) {
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-
+  const [userId, setUserId] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -247,8 +256,7 @@ function LoginForm({ onSuccess, onGoSignup }) {
       const res = await fetch(`${API_BASE}/api/auth/login/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include", // 쿠키 기반이면 유지, 아니면 제거 가능
-        body: JSON.stringify({ username: email, password }),
+        body: JSON.stringify({ username, password }),
       });
 
       const data = await safeJson(res);
@@ -259,16 +267,11 @@ function LoginForm({ onSuccess, onGoSignup }) {
         );
       }
 
-      // 응답 토큰 키는 백엔드에 맞게 조정
-      const token =
-        data?.accessToken ||
-        data?.token ||
-        data?.jwt ||
-        data?.data?.accessToken;
-
-      if (!token) throw new Error("토큰이 응답에 포함되어 있지 않습니다.");
-
-      onSuccess(token);
+      // 백엔드 응답 키에 맞춰 1개로 고정 권장(현재는 여러 후보 허용)
+      const token = data?.access;
+      if (!token)
+        throw new Error("토큰(access)이 응답에 포함되어 있지 않습니다.");
+      onSuccess(token, username);
     } catch (err) {
       setErrorMsg(err?.message || "로그인 중 오류가 발생했습니다.");
     } finally {
@@ -279,12 +282,13 @@ function LoginForm({ onSuccess, onGoSignup }) {
   return (
     <form className="auth-form" onSubmit={handleSubmit}>
       <label className="auth-field">
-        <div className="auth-field__label">이메일</div>
+        <div className="auth-field__label">아이디</div>
         <input
           className="auth-field__input"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          autoComplete="email"
+          type="text"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          autoComplete="username"
         />
       </label>
 
@@ -310,9 +314,9 @@ function LoginForm({ onSuccess, onGoSignup }) {
   );
 }
 
-/** 회원가입 폼: 엔드포인트가 있으면 연결 */
+/** 회원가입 폼: /api/auth/signup/ 연동 (username, password JSON 전송) */
 function SignupForm({ onGoLogin }) {
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [password2, setPassword2] = useState("");
 
@@ -332,10 +336,21 @@ function SignupForm({ onGoLogin }) {
 
     setLoading(true);
     try {
-      // TODO: 실제 회원가입 API가 있다면 여기서 fetch로 연결
-      // const res = await fetch(`${API_BASE}/api/auth/signup/`, {...})
+      const res = await fetch(`${API_BASE}/api/auth/signup/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
 
-      setDoneMsg("회원가입 요청이 완료되었습니다. 로그인 해주세요.");
+      const data = await safeJson(res);
+
+      if (!res.ok) {
+        throw new Error(
+          data?.message || data?.detail || `회원가입 실패 (HTTP ${res.status})`
+        );
+      }
+
+      setDoneMsg("회원가입이 완료되었습니다.");
     } catch (err) {
       setErrorMsg(err?.message || "회원가입 중 오류가 발생했습니다.");
     } finally {
@@ -346,12 +361,14 @@ function SignupForm({ onGoLogin }) {
   return (
     <form className="auth-form" onSubmit={handleSubmit}>
       <label className="auth-field">
-        <div className="auth-field__label">이메일</div>
+        <div className="auth-field__label">아이디/이메일</div>
         <input
           className="auth-field__input"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          autoComplete="email"
+          type="text"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          autoComplete="username"
+          disabled={!!doneMsg}
         />
       </label>
 
@@ -363,6 +380,7 @@ function SignupForm({ onGoLogin }) {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           autoComplete="new-password"
+          disabled={!!doneMsg}
         />
       </label>
 
@@ -374,16 +392,28 @@ function SignupForm({ onGoLogin }) {
           value={password2}
           onChange={(e) => setPassword2(e.target.value)}
           autoComplete="new-password"
+          disabled={!!doneMsg}
         />
       </label>
 
       {errorMsg && <p className="auth-error">{errorMsg}</p>}
-      {doneMsg && <p className="auth-done">{doneMsg}</p>}
 
-      <div className="auth-form__actions">
-        <button type="submit" disabled={loading}>
+      {doneMsg && (
+        <div className="auth-done-wrap">
+          <p className="auth-done">{doneMsg}</p>
+        </div>
+      )}
+
+      <div className="auth-form__actions auth-form__actions--row">
+        <button type="submit" disabled={loading || !!doneMsg}>
           {loading ? "처리 중..." : "회원가입"}
         </button>
+
+        {doneMsg && (
+          <button type="button" onClick={() => onGoLogin?.()}>
+            로그인
+          </button>
+        )}
       </div>
     </form>
   );

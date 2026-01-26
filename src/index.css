@@ -193,8 +193,8 @@ body {
 }
 
 .heroLogo {
-  width: 300px;
-  height: 150px;
+  width: 260px;
+  height: 195px;
   position: absolute;
   top: 50%;
   left: 50%;
@@ -219,6 +219,23 @@ body {
 }
 
 .signin:hover {
+  background: #f3fafd;
+}
+
+.grid2 {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 28px;
+}
+
+.logout {
+  background: #ffffff;
+  color: #68d0e4;
+  border: none;
+}
+
+.logout:hover {
   background: #f3fafd;
 }
 
@@ -351,7 +368,7 @@ body {
 }
 
 .cafeName {
-  text-align: left ;
+  text-align: left;
   font-weight: 900;
 }
 .cafeMeta {
@@ -375,7 +392,7 @@ body {
   grid-auto-flow: column;
   justify-content: center;
   gap: 8px;
-  margin-top: 12px;
+  margin-top: 36px;
 }
 
 .dot {
