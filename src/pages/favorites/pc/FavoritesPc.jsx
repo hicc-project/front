@@ -75,7 +75,7 @@ export default function FavoritesPC() {
           style={styles.sortBtn}
           onClick={() => setOpen((v) => !v)}
         >
-          <span style={styles.sortArrow}>v</span>
+          <span style={styles.sortArrow}>V</span>
           <span>{sortKey}</span>
         </button>
 
@@ -216,7 +216,7 @@ const styles = {
     alignItems: "center",
     gap: 8,
   },
-  sortArrow: { color: SUB, fontSize: 14, transform: "translateY(-1px)" },
+  sortArrow: { marginTop: 4, color: SUB, fontSize: 16, transform: "translateY(-1px) scaleX(1.4)" },
 
   dropdown: {
     position: "absolute",

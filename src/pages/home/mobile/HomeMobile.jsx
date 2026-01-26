@@ -218,6 +218,7 @@ const styles = {
     gap: 10,
   },
   recName: {
+    textAlign: "left",
     fontSize: 16,
     fontWeight: 900,
     color: "#fff",
@@ -226,12 +227,16 @@ const styles = {
     textOverflow: "ellipsis",
   },
   recMeta: {
+    textAlign: "left",
     marginTop: 4,
     fontSize: 12,
     fontWeight: 700,
     color: "rgba(255,255,255,0.92)",
   },
   recRight: {
+    gap: 6,
+    display: "flex",
+    flexDirection: "column",  
     textAlign: "right",
     fontSize: 12,
     fontWeight: 800,

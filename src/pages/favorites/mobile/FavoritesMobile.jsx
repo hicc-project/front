@@ -196,11 +196,7 @@ const styles = {
     color: TEXT,
     cursor: "pointer",
   },
-  sortArrow: {
-    fontSize: 14,
-    color: SUB,
-    transform: "translateY(-1px)",
-  },
+  sortArrow: { color: SUB, fontSize: 16, transform: "translateY(-2px) scaleX(1.4)" },
 
   dropdown: {
     position: "absolute",

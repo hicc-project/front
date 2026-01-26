@@ -1011,7 +1011,7 @@ const styles = {
     textOverflow: "ellipsis",
     maxWidth: "100%",
   },
-  cardMeta: { fontSize: 12, color: "#666", lineHeight: 1.5 },
+  cardMeta: { marginTop: 10, fontSize: 11, color: "#666", lineHeight: 1.5 },
 
 
   routeBtn: {
