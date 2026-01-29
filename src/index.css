@@ -1,0 +1,499 @@
+:root {
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+* {
+  box-sizing: border-box;
+}
+
+body {
+  overflow-y: auto;
+  min-height: 100vh;
+}
+
+.appShell {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  background: #ffffff;
+  border-right: 1px solid #e9e9ee;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  padding: 14px 10px;
+  margin: 0;
+}
+.navIcon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+.navIcon1 {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+.navIcon2 {
+  width: 50px;
+  height: 50px;
+  object-fit: contain;
+}
+
+.navIcon3 {
+  width: 50px;
+  height: 50px;
+  object-fit: contain;
+}
+
+.navIcon4 {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+}
+
+.navIcon5 {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+.navIcon6 {
+  width: 80px;
+  height: 60px;
+}
+
+.sidebarTop .appName {
+  font-weight: 800;
+  font-size: 14px;
+  padding: 0;
+}
+
+.nav {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  padding-top: 8px;
+}
+
+.navItem {
+  text-decoration: none;
+  color: #6b6b73;
+  display: grid;
+  justify-items: center;
+  padding: 10px 8px;
+  border-radius: 14px;
+  height: 92px;
+}
+
+.navIcon {
+  font-size: 22px;
+  line-height: 1;
+}
+.navLabel {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sidebarBottom {
+  padding-top: 10px;
+}
+
+.contentShell {
+  padding: 0;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: auto;
+  min-width: 0;
+}
+
+.page {
+  padding: 0;
+}
+
+.hero {
+  height: 320px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #68d0e4, #dcf4fa);
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+}
+
+.auth-actions {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+}
+
+.auth-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+}
+
+.auth-modal__overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.auth-modal__panel {
+  position: relative;
+  width: 420px;
+  max-width: calc(100vw - 32px);
+  margin: 80px auto 0;
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+/* 헤더 */
+.auth-modal__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.auth-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+.auth-field__input {
+  width: 100%;
+  padding: 10px;
+}
+.auth-form__actions {
+  display: flex;
+  gap: 8px;
+}
+.auth-error {
+  color: #c00;
+}
+.auth-done {
+  color: #060;
+}
+
+.heroLogo {
+  width: 260px;
+  height: 195px;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%); /* 가로/세로 중앙 */
+}
+
+.login {
+  background: #ffffff;
+  color: #68d0e4;
+  margin-right: 3px;
+  border: none;
+}
+
+.login:hover {
+  background: #f3fafd;
+}
+
+.signin {
+  background: #ffffff;
+  color: #68d0e4;
+  border: none;
+}
+
+.signin:hover {
+  background: #f3fafd;
+}
+
+.grid2 {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 28px;
+}
+
+.logout {
+  background: #ffffff;
+  color: #68d0e4;
+  border: none;
+}
+
+.logout:hover {
+  background: #f3fafd;
+}
+
+.grid2 {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 28px;
+}
+
+.panel {
+  background: #ffffff;
+  border: 1px solid #ededf2;
+  border-radius: 18px;
+  padding: 16px;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.06);
+}
+
+.panelHeader {
+  margin-bottom: 30px;
+}
+
+.panelTitle {
+  margin-left: 4px;
+  text-align: left;
+  font-weight: 900;
+  color: #444;
+  letter-spacing: 0.2px;
+}
+
+.panelSub {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #777;
+}
+
+.list {
+  display: grid;
+  gap: 10px;
+}
+
+.listRow {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 10px;
+  border-radius: 14px;
+  border: 1px solid #f0f0f6;
+}
+
+.listText {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  gap: 4px; /* 👍 이름/영업시간 간격 */
+}
+
+.badge {
+  min-width: 54px;
+  text-align: center;
+  padding: 10px 10px;
+  border-radius: 14px;
+  background: #84deee;
+  color: #fff;
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.listName {
+  font-weight: 800;
+  font-size: 13px;
+}
+.listMeta {
+  font-size: 12px;
+  color: #777;
+  margin-top: 2px;
+}
+
+.ghostBtn {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-size: 20px;
+  color: #84deee;
+}
+
+.cardRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.cafeCard {
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid #f0e3e8;
+  background: #a4e6f2;
+  position: relative;
+}
+
+.cafeTag {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(255, 255, 255, 0.5);
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #68d0e4;
+}
+
+.cafeImgPlaceholder {
+  height: 170px;
+  display: grid;
+  place-items: center;
+  color: rgba(0, 0, 0, 0.5);
+  font-weight: 800;
+  background: #e9e9e9;
+}
+
+.cafeFooter {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.cafeName {
+  text-align: left;
+  font-weight: 900;
+}
+.cafeMeta {
+  text-align: left;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.65);
+  margin-top: 2px;
+}
+
+.cafeRightMeta {
+  text-align: right;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.65);
+  display: grid;
+  gap: 5px;
+  align-content: start;
+}
+
+.dots {
+  display: grid;
+  grid-auto-flow: column;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 36px;
+}
+
+.dot {
+  width: 26px;
+  height: 4px;
+  border-radius: 999px;
+  background: #ddd;
+}
+
+.dotActive {
+  background: #888;
+}
+
+.pageTitle {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 900;
+}
+.pageDesc {
+  margin-top: 10px;
+  color: #666;
+}
+
+.findcafe-menu-item:hover {
+  background: #a3e6f2;
+  color: #ffffff;
+}
+
+/* App.css (또는 index.css)에 추가 */
+
+/* 하단 바 컨테이너 */
+.mnav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+
+  height: 76px;
+  padding: 6px 12px calc(6px + env(safe-area-inset-bottom)); /* iOS 하단 안전영역 */
+  background: #ffffff;
+
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  align-items: center;
+
+  z-index: 10000;
+}
+
+/* 각 탭 */
+.mnavItem {
+  text-decoration: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: #9a9a9a;
+  font-weight: 800;
+  font-size: 12px;
+  margin-bottom: 0px;
+}
+
+/* 아이콘 */
+.mnavIcon {
+  width: 50px;
+  height: 50px;
+  object-fit: contain;
+  opacity: 0.55; /* 비활성 회색 느낌 */
+}
+
+.mnavIconStar {
+  width: 30px;
+  height: 50px;
+  transform: translateY(-1px); /* 세로 미세 조정 */
+}
+/* 라벨 */
+.mnavLabel {
+  line-height: 1;
+}
+
+/* 활성 탭 */
+.mnavActive {
+  color: #a3e6f2;
+}
+.mnavActive .mnavIcon {
+  opacity: 1;
+  filter: none; /* 아이콘이 원래 핑크 리소스면 그대로 */
+}
+
+/* 모바일에서 하단바가 컨텐츠 가리는 것 방지(필요 시) */
+@media (max-width: 768px) {
+  .pageWithBottomNav {
+    padding-bottom: 78px;
+  }
+}
+
+/* 반응형(폭이 좁아지면 카드/그리드가 1열로 변경) */
+@media (max-width: 980px) {
+  .grid2 {
+    grid-template-columns: 1fr;
+  }
+  .cardRow {
+    grid-template-columns: 1fr;
+  }
+}
