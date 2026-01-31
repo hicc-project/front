@@ -13,9 +13,14 @@ import {
 
 import { useCafeStatus } from "../../../providers/CafeStatusProvider";
 import { useCafeFinderState } from "../../../providers/CafeFinderStateProvider";
+import { useAuth } from "../../../providers/AuthProvider";
+import { useBookmarks } from "../../../providers/BookmarksProvider";
 
 
 export default function FindCafeMobile() {
+  const { isAuthed } = useAuth();
+  const { isBookmarked, toggle } = useBookmarks();
+
   const distanceOptions = useMemo(
     () => [
       { label: "300m", km: 0.3 },
@@ -43,7 +48,7 @@ export default function FindCafeMobile() {
 
   const { openStatusMap, version: openStatusVersion } = useCafeStatus();
 
-  // ✅ 페이지 처음 들어오면 바로 "내 위치" 모드로 시작
+  //  페이지 처음 들어오면 바로 "내 위치" 모드로 시작
   const autoMyLocInitRef = useRef(false);
   useEffect(() => {
     if (autoMyLocInitRef.current) return;
@@ -399,7 +404,7 @@ export default function FindCafeMobile() {
     });
   }
 
-  // ✅ PC와 동일 정렬 규칙: 남은시간 많은 순(있으면 우선), 없으면 거리순
+
   function minutesToCloseFor(place) {
     const s = openStatusMap[String(place.kakaoId)];
     const m = s?.minutes_to_close;
@@ -494,8 +499,28 @@ export default function FindCafeMobile() {
           ) : (
             sortedPlaces.map((p) => (
               <div key={p.id} style={styles.card}>
+                    <button
+                      type="button"
+                      style={styles.starBtn}
+                      title={isAuthed ? "즐겨찾기" : "로그인 후 즐겨찾기 가능"}
+                      onClick={async (e) => {
+                        e.stopPropagation(); 
+                        try {
+                          await toggle(p.kakaoId, p.name);
+                        } catch (err) {
+                          if (err?.code === "LOGIN_REQUIRED") alert("즐겨찾기는 로그인 후 사용할 수 있어요.");
+                          else alert(err?.message || "즐겨찾기 처리 실패");
+                        }
+                      }}
+                    >
+                      {isBookmarked(p.kakaoId) ? "★" : "☆"}
+                    </button>
                 <div style={styles.textBlock}>
-                  <div style={styles.name}>{p.name}</div>
+                  <div style={styles.nameRow}>
+      
+                    <div style={styles.name} title={p.name}>{p.name}</div>
+                  </div>
+
                   <div style={styles.meta}>거리 {formatDistance(p.distM)}</div>
                 </div>
 
@@ -540,6 +565,9 @@ function MobileDetailPanel({ place, onBack, onRoute }) {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(null);
   const [error, setError] = useState("");
+  const { isAuthed } = useAuth();
+  const { isBookmarked, toggle } = useBookmarks();
+
 
   const { openStatusMap, version, warmupIfNeeded } = useCafeStatus();
 
@@ -569,7 +597,7 @@ function MobileDetailPanel({ place, onBack, onRoute }) {
           return;
         }
 
-        // ✅ collect_details/refresh_status는 Provider가 처리
+        //  collect_details/refresh_status는 Provider가 처리
         warmupIfNeeded();
       } catch (e) {
         if (!cancelled) setError("영업 정보를 불러오지 못했습니다.");
@@ -604,8 +632,23 @@ function MobileDetailPanel({ place, onBack, onRoute }) {
 
         <div style={styles.detailTitleRow}>
           <div style={styles.detailTitle}>{place.name}</div>
-          <button type="button" style={styles.detailStar} title="즐겨찾기(미구현)">
-            ☆
+          <button
+            type="button"
+            style={styles.detailStar}
+            title={isAuthed ? "즐겨찾기" : "로그인 후 즐겨찾기 가능"}
+            onClick={async () => {
+              try {
+                await toggle(place.kakaoId, place.name);
+              } catch (e) {
+                if (e?.code === "LOGIN_REQUIRED") {
+                  alert("즐겨찾기는 로그인 후 사용할 수 있어요.");
+                } else {
+                  alert(e?.message || "즐겨찾기 처리 실패");
+                }
+              }
+            }}
+          >
+            {isBookmarked(place.kakaoId) ? "★" : "☆"}
           </button>
         </div>
 
@@ -621,10 +664,7 @@ function MobileDetailPanel({ place, onBack, onRoute }) {
         </div>
       </div>
 
-      <div style={styles.detailPhotos}>
-        <div style={styles.detailPhoto}>카페사진1</div>
-        <div style={styles.detailPhoto}>카페사진2</div>
-      </div>
+
 
       <div style={styles.detailInfo}>
         <div style={styles.detailInfoRow}>주소: {place.address || "주소 정보 없음"}</div>
@@ -854,10 +894,37 @@ const styles = {
     flexDirection: "column",
     alignItems: "flex-start",
     textAlign: "left",
+    flex: 1,
+    marginLeft: 8,
   },
 
-  name: { fontWeight: 900, color: "#222" },
+  nameRow: {
+  textAlign: "left",
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  minWidth: 0,
+  },
+  name: {
+    fontWeight: 900, color: "#222",  minWidth: 0,
+    flex: 1,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap", 
+  },
+  
+  starBtn: {
+    color: PINK,
+    border: "none",
+    background: "transparent",
+    padding: 0,
+    fontSize: 24,     // 원하면 20~24로 조절
+    lineHeight: "1",
+    cursor: "pointer",
+    flex: "0 0 auto",
+  },
   meta: {
+
     fontSize: 12,
     color: "#777",
     marginTop: 2,
@@ -867,7 +934,7 @@ const styles = {
 
   actions: {
     display: "flex",
-    alignItems: "center",
+
     gap: 8,
     flexShrink: 0,
   },
@@ -966,26 +1033,9 @@ const styles = {
     background: "#fff",
   },
 
-  detailPhotos: {
-    marginTop: 12,
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 10,
-    padding: "0 6px",
-  },
-
-  detailPhoto: {
-    height: 120,
-    borderRadius: 14,
-    background: "#D9D9D9",
-    color: "#fff",
-    fontWeight: 900,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
 
   detailInfo: {
+    textAlign: "left",
     marginTop: 12,
     padding: "0 6px",
     color: "#7A7A7A",

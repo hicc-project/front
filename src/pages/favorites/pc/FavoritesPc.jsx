@@ -3,23 +3,15 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import locationIcon from "../../../icon/Location.png";
 import shareIcon from "../../../icon/Share.png";
+import { useAuth } from "../../../providers/AuthProvider";
+import { useBookmarks } from "../../../providers/BookmarksProvider";
 
 export default function FavoritesPC() {
-  const initial = useMemo(
-    () => [
-      { id: "f1", name: "카페이름", hours: "00:00 - 00:00", reviews: "0,000개", memo: "" },
-      { id: "f2", name: "카페이름", hours: "00:00 - 00:00", reviews: "0,000개", memo: "" },
-      { id: "f3", name: "카페이름", hours: "00:00 - 00:00", reviews: "0,000개", memo: "" },
-      { id: "f4", name: "카페이름", hours: "00:00 - 00:00", reviews: "0,000개", memo: "" },
-      { id: "f5", name: "카페이름", hours: "00:00 - 00:00", reviews: "0,000개", memo: "" },
-      { id: "f6", name: "카페이름", hours: "00:00 - 00:00", reviews: "0,000개", memo: "" },
-      { id: "f7", name: "카페이름", hours: "00:00 - 00:00", reviews: "0,000개", memo: "" },
-      { id: "f8", name: "카페이름", hours: "00:00 - 00:00", reviews: "0,000개", memo: "" },
-    ],
-    []
-  );
+  const { isAuthed } = useAuth();
+  const { items: bookmarks, loading, error, refresh, toggle } = useBookmarks();
 
-  const [items, setItems] = useState(initial);
+  // 메모는 백엔드에 저장 안하니까 프론트 로컬로만 관리(카페 이름 기준)
+  const [memoByName, setMemoByName] = useState({});
 
   
   const [sortKey, setSortKey] = useState("이름순");
@@ -36,24 +28,28 @@ export default function FavoritesPC() {
   }, []);
 
   const sortedItems = useMemo(() => {
-    const arr = [...items];
+    const arr = bookmarks.map((b) => ({
+      id: b.id,
+      kakaoId: b.kakao_id,
+      name: b.cafe_name,
+      hours: "영업시간 정보 없음",
+      memo: memoByName[b.cafe_name] ?? "",
+    }));
 
     // 실제 데이터 붙이면 여기 로직만 바꾸면 됨
     if (sortKey === "이름순") {
       arr.sort((a, b) => a.name.localeCompare(b.name, "ko"));
-    } else if (sortKey === "추천순") {
-      // 지금은 추천 데이터 없어서 "그대로"
-      // 나중에 rating/likes 같은 값 생기면 여기에 sort 넣으면 됨
+
     } else if (sortKey === "거리순") {
       // 지금은 거리 데이터 없어서 "그대로"
       // 나중에 distM 같은 값 생기면 여기에 sort 넣으면 됨
     }
 
     return arr;
-  }, [items, sortKey]);
+  }, [bookmarks, memoByName, sortKey]);
 
-  const updateMemo = (id, memo) => {
-    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, memo } : it)));
+  const updateMemo = (kakaoId, memo) => {
+    setMemoByName((prev) => ({ ...prev, [kakaoId]: memo }));
   };
 
   return (
@@ -81,7 +77,7 @@ export default function FavoritesPC() {
 
         {open && (
           <div style={styles.dropdown}>
-            {["이름순", "추천순", "거리순"].map((k) => (
+            {["이름순", "거리순"].map((k) => (
               <button
                 key={k}
                 type="button"
@@ -102,31 +98,52 @@ export default function FavoritesPC() {
       </div>
 
       <div style={styles.list}>
-        {sortedItems.map((cafe, idx) => (
-          <FavoriteRow
-            key={cafe.id}
-            cafe={cafe}
-            placeholder={idx === 0 ? "내 메모" : "나의 한마디"}
-            onMemoChange={(v) => updateMemo(cafe.id, v)}
-          />
-        ))}
+        {!isAuthed ? (
+          <div style={styles.emptyBox}>즐겨찾기는 로그인 후 사용할 수 있어요.</div>
+        ) : loading ? (
+          <div style={styles.emptyBox}>불러오는 중...</div>
+        ) : error ? (
+          <div style={styles.emptyBox}>
+            <div style={{ marginBottom: 10 }}>{error}</div>
+            <button type="button" style={styles.retryBtn} onClick={() => refresh({ force: true })}>
+              다시 시도
+            </button>
+          </div>
+        ) : sortedItems.length === 0 ? (
+          <div style={styles.emptyBox}>아직 즐겨찾기한 카페가 없어요.</div>
+        ) : (
+          sortedItems.map((cafe, idx) => (
+            <FavoriteRow
+              key={cafe.id}
+              cafe={cafe}
+              placeholder={idx === 0 ? "내 메모" : "나의 한마디"}
+              onMemoChange={(v) => updateMemo(cafe.kakaoId, v)}
+              onToggleFav={async () => {
+                try {
+                  await toggle(cafe.kakaoId,cafe.name);
+                } catch (e) {
+                  alert(e?.message || "즐겨찾기 처리 실패");
+                }
+              }}
+            />
+          ))
+        )}
       </div>
     </div>
   );
 }
 
-function FavoriteRow({ cafe, placeholder, onMemoChange }) {
+function FavoriteRow({ cafe, placeholder, onMemoChange, onToggleFav }) {
   return (
     <div style={styles.row}>
       {/* Left */}
       <div style={styles.leftBlock}>
-        <span style={styles.rowStar} aria-hidden="true">
+        <button type="button" onClick={onToggleFav} style={styles.rowStarBtn} title="즐겨찾기 삭제">
           ★
-        </span>
+        </button>
         <div style={styles.info}>
           <div style={styles.name}>{cafe.name}</div>
           <div style={styles.meta}>영업시간 {cafe.hours}</div>
-          <div style={styles.meta}>리뷰 {cafe.reviews}</div>
         </div>
       </div>
 
@@ -194,6 +211,7 @@ const styles = {
     fontWeight: 800,
     color: TEXT,
     letterSpacing: 0.2,
+    textAlign: "left",
   },
   brandSub: { marginTop: 4, fontSize: 14, color: SUB, fontWeight: 600 },
 
@@ -262,6 +280,30 @@ const styles = {
 
   leftBlock: { display: "flex", alignItems: "center", gap: 14, minWidth: 0 },
   rowStar: { fontSize: 22, color: PINK, width: 26, textAlign: "center" },
+  rowStarBtn: {
+    fontSize: 22,
+    color: PINK,
+    width: 26,
+    textAlign: "center",
+    border: "none",
+    background: "transparent",
+    cursor: "pointer",
+    padding: 0,
+  },
+
+  emptyBox: {
+    padding: "18px 22px",
+    color: SUB,
+    fontWeight: 700,
+  },
+  retryBtn: {
+    border: "1px solid #82DAEB",
+    background: "#fff",
+    borderRadius: 10,
+    padding: "8px 12px",
+    cursor: "pointer",
+    fontWeight: 800,
+  },
 
   info: { 
     minWidth: 0,

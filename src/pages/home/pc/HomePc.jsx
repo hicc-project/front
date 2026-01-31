@@ -1,80 +1,102 @@
-import React from "react";
-import AuthButtons from "./AuthButtons";
+import { useEffect, useState } from "react";
 import logoRec from "../../../icon/logo_rec.png";
+import bakeryicon from "../../../icon/bakeryicon.png";
+import drinkicon from "../../../icon/drinkicon.png";
+import desserticon from "../../../icon/desserticon.png";
+import { cafes } from "../cafes.js";
+
+function pick2Distinct(len) {
+  const a = Math.floor(Math.random() * len);
+  let b = Math.floor(Math.random() * (len - 1));
+  if (b >= a) b += 1;
+  return [a, b];
+}
 
 export default function HomePc() {
+  const [selected, setSelected] = useState([]);
+
+  useEffect(() => {
+    if (!Array.isArray(cafes) || cafes.length < 2) return;
+    const [a, b] = pick2Distinct(cafes.length);
+    setSelected([cafes[a], cafes[b]]);
+  }, []);
+
   return (
     <div className="page">
       <section className="hero">
-        <AuthButtons />
         <img src={logoRec} alt="앱 로고" className="heroLogo" />
       </section>
+
       {/* 하단 콘텐츠 */}
       <section className="grid2">
         {/* 좌측 NEW */}
         <div className="panel">
           <div className="panelHeader">
-            <div className="panelTitle">NEW!</div>
-            <div className="panelSub">근처에 새로 생긴 카페를 즐겨보세요!</div>
+            <div className="panelTitle">How About This Menu!</div>
+            <div className="panelSub"> 이 메뉴는 어떤가요! </div>
           </div>
 
           <div className="list">
-            {[
-              { km: "0.3km", name: "카페이름", time: "00:00 - 00:00" },
-              { km: "0.5km", name: "카페이름", time: "00:00 - 00:00" },
-              { km: "1.0km", name: "카페이름", time: "00:00 - 00:00" },
-              { km: "1.2km", name: "카페이름", time: "00:00 - 00:00" },
-            ].map((x, idx) => (
-              <div className="listRow" key={idx}>
-                <div className="badge">{x.km}</div>
-                <div className="listText">
-                  <div className="listName">{x.name}</div>
-                  <div className="listMeta">영업시간 {x.time}</div>
-                </div>
-                <button className="ghostBtn" aria-label="즐겨찾기">
-                  ☆
-                </button>
-              </div>
-            ))}
+            <div classname="threeblocks">
+              <img src={drinkicon} alt="음료" className="threeicons" />
+              <div>녹차라떼</div>
+            </div>
+            <div classname="threeblocks">
+              <img src={bakeryicon} alt="제빵" className="threeicons" />
+              <div>앙버터</div>
+            </div>
+            <div classname="threeblocks">
+              <img src={desserticon} alt="디저트" className="threeicons" />
+              <div>당근케이크</div>
+            </div>
           </div>
         </div>
 
         {/* 우측 추천 */}
         <div className="panel">
           <div className="panelHeader">
-            <div className="panelTitle">TODAY’S CAFE RECOMMANDATIONS!</div>
+            <div className="panelTitle">OUR TEAM'S CAFE RECOMMANDATION!</div>
           </div>
 
           <div className="cardRow">
-            <div className="cafeCard">
-              <div className="cafeTag">✦ 오늘의 추천 카페</div>
-              <div className="cafeImgPlaceholder">이미지</div>
-              <div className="cafeFooter">
-                <div>
-                  <div className="cafeName">소과당 홍대점</div>
-                  <div className="cafeMeta">영업중 11:00-22:00</div>
-                </div>
-                <div className="cafeRightMeta">
-                  <div>0.7km</div>
-                  <div>리뷰 1,929</div>
-                </div>
-              </div>
-            </div>
+            {selected.map((cafe) => (
+              <div className="cafeCard" key={cafe.id}>
+                <div className="cafeTag">{cafe.tag}</div>
 
-            <div className="cafeCard">
-              <div className="cafeTag">✦ 친구와 함께 가기</div>
-              <div className="cafeImgPlaceholder">이미지</div>
-              <div className="cafeFooter">
-                <div>
-                  <div className="cafeName">메이플런지</div>
-                  <div className="cafeMeta">영업중 12:00-20:00</div>
+                <div className="cafeImgPlaceholder">
+                  <img
+                    src={new URL(
+                      `../img/${cafe.id}.jpeg`,
+                      import.meta.url
+                    ).toString()}
+                    alt={cafe.name}
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                      display: "block",
+                    }}
+                  />
                 </div>
-                <div className="cafeRightMeta">
-                  <div>0.7km</div>
-                  <div>리뷰 1,929</div>
+
+                <div className="cafeFooter">
+                  <div className="cafeInfo">
+                    <div className="cafeName">{cafe.name}</div>
+
+                    <div className="cafeLocation" title={cafe.location}>
+                      🗺️ {cafe.location}
+                    </div>
+
+                    <div className="cafeMetaRow">
+                      <div className="cafeMeta">⏰ {cafe.time}</div>
+                      {cafe.signature ? (
+                        <div className="cafeMeta">⭐ {cafe.signature}</div>
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
+            ))}
           </div>
 
           <div className="dots">

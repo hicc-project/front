@@ -1,16 +1,30 @@
-// src/layout/Layout.jsx
-import { Outlet } from "react-router-dom";
+// Layout.jsx
+import { Outlet, useLocation } from "react-router-dom";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-
 import SidebarDesktop from "../components/sidebar/SidebarDesktop";
 import SidebarMobile from "../components/sidebar/SidebarMobile";
+import AuthButtons from "../pages/home/pc/AuthButtons";
+
+const HIDE_AUTH_PATHS = [
+  "/login",
+  "/signup",
+  "/find",     // 빼고싶은 페이지 라우터 주소 
+];
 
 export default function Layout() {
   const isMobile = useMediaQuery("(max-width: 768px)");
+  const { pathname } = useLocation();
+
+  const hideAuth = HIDE_AUTH_PATHS.some((p) => pathname.startsWith(p));
 
   return (
     <div style={styles.page}>
-      {/* PC일 때만 사이드바 표시 */}
+      {!hideAuth && (
+        <div style={styles.authFloating}>
+          <AuthButtons />
+        </div>
+      )}
+
       {!isMobile && (
         <aside style={styles.sidebar}>
           <SidebarDesktop />
@@ -21,7 +35,6 @@ export default function Layout() {
         <Outlet />
       </main>
 
-      {/* 모바일일 때만 하단 네비(또는 모바일 사이드바) */}
       {isMobile && (
         <nav style={styles.mobileNav}>
           <SidebarMobile />
@@ -54,6 +67,7 @@ const styles = {
     flexDirection: "column",
   },
   sidebar: { width: 110, borderRight: "1px solid #eee" },
+
   mobileNav: {
     position: "fixed",
     left: 0,
@@ -63,5 +77,10 @@ const styles = {
     borderTop: "1px solid #eee",
     background: "#fff",
     zIndex: 10000,
+  },
+  authFloating: {
+    top: 10,
+    right: 14,
+    zIndex: 9999,
   },
 };

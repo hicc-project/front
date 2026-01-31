@@ -1,12 +1,10 @@
 import React, { useEffect, useState } from "react";
+import { useAuth } from "../../../providers/AuthProvider";
 
 const API_BASE = "https://back-r4e1.onrender.com";
 
 export default function AuthButtons() {
-  const [isAuthed, setIsAuthed] = useState(() => {
-    return !!localStorage.getItem("accessToken");
-  });
-  const [userId, setUserId] = useState("");
+  const { isAuthed, username: userId, setAuth, logout } = useAuth();
   const [modal, setModal] = useState(null); // null | "login" | "signup"
 
   function openLogin() {
@@ -22,9 +20,7 @@ export default function AuthButtons() {
   }
 
   function handleLogout() {
-    localStorage.removeItem("accessToken");
-    setIsAuthed(false);
-    setUserId("");
+    logout();
   }
 
   // ESC로 닫기
@@ -184,7 +180,7 @@ export default function AuthButtons() {
         </div>
       ) : (
         <div className="auth-actions">
-          <span style={{ color: "#fff", marginRight: "15px", fontSize: 13 }}>
+          <span style={{ color: "#000", marginRight: "15px", fontSize: 13 }}>
             {userId}님 환영합니다.
           </span>
           <button type="button" className="logout" onClick={handleLogout}>
@@ -197,9 +193,7 @@ export default function AuthButtons() {
         <AuthModal title="로그인" onClose={closeModal}>
           <LoginForm
             onSuccess={(token, username) => {
-              localStorage.setItem("accessToken", token);
-              setUserId(username);
-              setIsAuthed(true);
+              setAuth(token, username);
               closeModal();
             }}
           />

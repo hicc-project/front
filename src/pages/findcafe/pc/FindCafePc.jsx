@@ -16,22 +16,22 @@ import {
 
 import { useCafeStatus } from "../../../providers/CafeStatusProvider";
 import { useCafeFinderState } from "../../../providers/CafeFinderStateProvider";
+import { useAuth } from "../../../providers/AuthProvider";
+import { useBookmarks } from "../../../providers/BookmarksProvider";
 
-/* ---------------------------
-  상세 영업정보 최적화(캐시/쿨다운)
-  - open_status_logs: 30초 캐시
-  - collect_details/refresh_status: 4분 쿨다운(너무 자주 호출 금지)
----------------------------- */
 const OPEN_LOGS_TTL_MS = 30_000;
 const WARMUP_COOLDOWN_MS = 240_000;
-
 
 let _openLogsCache = { ts: 0, data: null };
 let _lastWarmupAt = 0;
 
 async function getOpenLogsCached({ force = false } = {}) {
   const now = Date.now();
-  if (!force && _openLogsCache.data && now - _openLogsCache.ts < OPEN_LOGS_TTL_MS) {
+  if (
+    !force &&
+    _openLogsCache.data &&
+    now - _openLogsCache.ts < OPEN_LOGS_TTL_MS
+  ) {
     return _openLogsCache.data;
   }
   const logs = await fetchOpenStatusLogs();
@@ -79,7 +79,11 @@ function MapLayout() {
     setMyLocation,
   } = useCafeFinderState();
 
-  const { openStatusMap, version: openStatusVersion, warmupIfNeeded } = useCafeStatus();
+  const {
+    openStatusMap,
+    version: openStatusVersion,
+    warmupIfNeeded,
+  } = useCafeStatus();
 
   // ✅ 페이지 처음 들어오면 바로 "내 위치" 모드로 시작
   const autoMyLocInitRef = useRef(false);
@@ -137,7 +141,8 @@ function MapLayout() {
   const [mapReadyVersion, setMapReadyVersion] = useState(0);
 
   const selectedLabel =
-    distanceOptions.find((o) => o.km === distanceKm)?.label ?? `${distanceKm}km`;
+    distanceOptions.find((o) => o.km === distanceKm)?.label ??
+    `${distanceKm}km`;
 
   function clearMyLocationMarker() {
     if (myMarkerRef.current) {
@@ -171,7 +176,11 @@ function MapLayout() {
 
     const imageSize = new kakao.maps.Size(36, 36);
     const imageOption = { offset: new kakao.maps.Point(18, 36) };
-    const markerImage = new kakao.maps.MarkerImage(myLocationIcon, imageSize, imageOption);
+    const markerImage = new kakao.maps.MarkerImage(
+      myLocationIcon,
+      imageSize,
+      imageOption
+    );
 
     myMarkerRef.current = new kakao.maps.Marker({
       position,
@@ -196,7 +205,10 @@ function MapLayout() {
     clearCircle();
 
     circleRef.current = new kakao.maps.Circle({
-      center: new kakao.maps.LatLng(centerRef.current.lat, centerRef.current.lng),
+      center: new kakao.maps.LatLng(
+        centerRef.current.lat,
+        centerRef.current.lng
+      ),
       radius: radiusM,
       strokeWeight: 2,
       strokeColor: PINK,
@@ -219,7 +231,11 @@ function MapLayout() {
     list.forEach((p) => {
       const imageSize = new kakao.maps.Size(18, 22);
       const imageOption = { offset: new kakao.maps.Point(11, 22) };
-      const markerImage = new kakao.maps.MarkerImage(cafeMarkerIcon, imageSize, imageOption);
+      const markerImage = new kakao.maps.MarkerImage(
+        cafeMarkerIcon,
+        imageSize,
+        imageOption
+      );
 
       const marker = new kakao.maps.Marker({
         position: new kakao.maps.LatLng(p.lat, p.lng),
@@ -235,7 +251,9 @@ function MapLayout() {
         )}</div>`,
       });
 
-      kakao.maps.event.addListener(marker, "mouseover", () => iw.open(map, marker));
+      kakao.maps.event.addListener(marker, "mouseover", () =>
+        iw.open(map, marker)
+      );
       kakao.maps.event.addListener(marker, "mouseout", () => iw.close());
 
       markersRef.current.push(marker);
@@ -260,16 +278,31 @@ function MapLayout() {
 
     const list = await fetchPlaces({ lat, lng, radius_m });
 
-    const normalized = (Array.isArray(list) ? list : []).map((p) => ({
-      id: String(p.kakao_id ?? p.id ?? `${p.lat}-${p.lng}-${p.name}`),
-      kakaoId: String(p.kakao_id ?? p.id ?? ""),
-      name: p.name ?? p.place_name ?? "카페",
-      lat: Number(p.lat),
-      lng: Number(p.lng),
-      address: p.address ?? "",
-      url: p.place_url ?? p.url ?? "",
-      distM: haversineMeters(lat, lng, Number(p.lat), Number(p.lng)),
-    }));
+    const normalized = (Array.isArray(list) ? list : []).map((p) => {
+      // 🔑 1. 후보 ID들
+      const rawKakaoId = p.kakao_id ?? p.place_id ?? p.id;
+
+      // 🔑 2. 숫자인 경우만 kakaoId로 인정
+      const kakaoId =
+        rawKakaoId != null && /^\d+$/.test(String(rawKakaoId))
+          ? String(rawKakaoId)
+          : "";
+
+      return {
+        // id는 프론트용 고유키니까 fallback 허용
+        id: kakaoId || `${p.lat}-${p.lng}-${p.name}`,
+
+        // ❗ 서버로 보내는 ID는 오직 kakaoId
+        kakaoId,
+
+        name: p.name ?? p.place_name ?? "카페",
+        lat: Number(p.lat),
+        lng: Number(p.lng),
+        address: p.address ?? "",
+        url: p.place_url ?? p.url ?? "",
+        distM: haversineMeters(lat, lng, Number(p.lat), Number(p.lng)),
+      };
+    });
 
     // 원본은 거리순 유지 (안정적)
     normalized.sort((a, b) => a.distM - b.distM);
@@ -284,8 +317,6 @@ function MapLayout() {
       drawMyLocationMarker(lat, lng);
       drawRadiusCircle(km);
     }
-
- 
   }
 
   // 드롭다운 외부 클릭 닫기
@@ -314,7 +345,10 @@ function MapLayout() {
       const kakao = window.kakao;
 
       const map = new kakao.maps.Map(mapContainerRef.current, {
-        center: new kakao.maps.LatLng(centerRef.current.lat, centerRef.current.lng),
+        center: new kakao.maps.LatLng(
+          centerRef.current.lat,
+          centerRef.current.lng
+        ),
         level: 3,
       });
 
@@ -404,7 +438,9 @@ function MapLayout() {
 
     loadPlacesFromBackendByBrowser(distanceKm).catch((e) => {
       console.error(e);
-      alert("collect/places 요청에 실패했습니다. 콘솔/네트워크를 확인해주세요.");
+      alert(
+        "collect/places 요청에 실패했습니다. 콘솔/네트워크를 확인해주세요."
+      );
       setIsMyLocationMode(false);
     });
   }, [isMyLocationMode]);
@@ -441,7 +477,9 @@ function MapLayout() {
       setCenter(my);
       setIsMyLocationMode(true);
     } catch {
-      alert("위치 정보를 가져올 수 없습니다. 브라우저 위치 권한을 확인해주세요.");
+      alert(
+        "위치 정보를 가져올 수 없습니다. 브라우저 위치 권한을 확인해주세요."
+      );
     }
   }
 
@@ -452,7 +490,8 @@ function MapLayout() {
         return;
       }
       navigator.geolocation.getCurrentPosition(
-        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        (pos) =>
+          resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
         reject,
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
@@ -574,6 +613,9 @@ function MapLayout() {
 }
 
 function RightPanel({ places, openStatusMap, onOpenDetail, onRoute }) {
+  const { isAuthed } = useAuth();
+  const { isBookmarked, toggle } = useBookmarks();
+
   return (
     <div style={styles.rightInner}>
       {places.length === 0 ? (
@@ -582,8 +624,10 @@ function RightPanel({ places, openStatusMap, onOpenDetail, onRoute }) {
         </div>
       ) : (
         places.map((p) => {
+          const starred = isBookmarked(p.kakaoId);
           const s = openStatusMap?.[String(p.kakaoId)];
-          const mtc = typeof s?.minutes_to_close === "number" ? s.minutes_to_close : null;
+          const mtc =
+            typeof s?.minutes_to_close === "number" ? s.minutes_to_close : null;
 
           let remainLine = "영업 정보 없음";
           if (s?.is_open_now === true && mtc != null) {
@@ -599,10 +643,6 @@ function RightPanel({ places, openStatusMap, onOpenDetail, onRoute }) {
           return (
             <div key={p.id} style={styles.card}>
               <div style={styles.cardRow}>
-                <div style={styles.thumbnail} aria-hidden="true">
-                  카페사진
-                </div>
-
                 <div style={styles.cardBody}>
                   <div style={styles.cardTitle}>{p.name}</div>
                   <div style={styles.cardMeta}>
@@ -612,21 +652,41 @@ function RightPanel({ places, openStatusMap, onOpenDetail, onRoute }) {
                 </div>
 
                 <div style={styles.cardTopRight}>
-                  <button type="button" style={styles.routeBtn} onClick={() => onRoute(p)}>
+                  <button
+                    type="button"
+                    style={styles.routeBtn}
+                    onClick={() => onRoute(p)}
+                  >
                     길찾기
                   </button>
 
-                  <button type="button" style={styles.starBtn} title="즐겨찾기(미구현)">
-                    ☆
+                  <button
+                    type="button"
+                    style={styles.starBtn}
+                    title={isAuthed ? "즐겨찾기" : "로그인 후 즐겨찾기 가능"}
+                    onClick={async () => {
+                      try {
+                        await toggle(p.kakaoId, p.name);
+                      } catch (e) {
+                        if (e?.code === "LOGIN_REQUIRED") {
+                          alert("즐겨찾기는 로그인 후 사용할 수 있어요.");
+                        } else {
+                          alert(e?.message || "즐겨찾기 처리 실패");
+                        }
+                      }
+                    }}
+                  >
+                    {starred ? "★" : "☆"}
                   </button>
                 </div>
 
-
-
-                <button type="button" style={styles.detailBtn} onClick={() => onOpenDetail(p)}>
+                <button
+                  type="button"
+                  style={styles.detailBtn}
+                  onClick={() => onOpenDetail(p)}
+                >
                   상세정보
                 </button>
-              
               </div>
             </div>
           );
@@ -636,14 +696,15 @@ function RightPanel({ places, openStatusMap, onOpenDetail, onRoute }) {
   );
 }
 
-
 function PlaceDetailPanel({ place, onBack, onCenterTo, onRoute }) {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(null);
   const [error, setError] = useState("");
 
-  const { openStatusMap, version, warmupIfNeeded } = useCafeStatus();
+  const { isAuthed } = useAuth();
+  const { isBookmarked, toggle } = useBookmarks();
 
+  const { openStatusMap, version, warmupIfNeeded } = useCafeStatus();
 
   useEffect(() => {
     if (!place?.kakaoId) return;
@@ -662,7 +723,9 @@ function PlaceDetailPanel({ place, onBack, onCenterTo, onRoute }) {
 
       try {
         // 일단 빠르게 단건 조회(있으면 즉시)
-        const cached = await fetchOpenStatusByKakaoId(place.kakaoId).catch(() => null);
+        const cached = await fetchOpenStatusByKakaoId(place.kakaoId).catch(
+          () => null
+        );
         if (cancelled) return;
 
         if (cached) {
@@ -670,11 +733,10 @@ function PlaceDetailPanel({ place, onBack, onCenterTo, onRoute }) {
           return;
         }
 
-      
         warmupIfNeeded?.(); // 쿨다운 걸린 전역 워밍업(내부에서 collect_details/refresh_status)
-     
       } catch (e) {
-        if (!cancelled) setError(e?.message || "영업 정보를 불러오지 못했습니다.");
+        if (!cancelled)
+          setError(e?.message || "영업 정보를 불러오지 못했습니다.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -690,7 +752,9 @@ function PlaceDetailPanel({ place, onBack, onCenterTo, onRoute }) {
   const openTime = status?.today_open_time ?? null;
   const closeTime = status?.today_close_time ?? null;
   const minutesToClose =
-    typeof status?.minutes_to_close === "number" ? status.minutes_to_close : null;
+    typeof status?.minutes_to_close === "number"
+      ? status.minutes_to_close
+      : null;
 
   const remainText =
     isOpenNow === true && minutesToClose != null
@@ -700,14 +764,34 @@ function PlaceDetailPanel({ place, onBack, onCenterTo, onRoute }) {
   return (
     <div style={styles.detailPanel}>
       <div style={styles.detailTopBar}>
-        <button type="button" onClick={onBack} style={styles.backBtn} aria-label="뒤로가기">
+        <button
+          type="button"
+          onClick={onBack}
+          style={styles.backBtn}
+          aria-label="뒤로가기"
+        >
           ←
         </button>
 
         <div style={styles.detailTopTitleRow}>
           <div style={styles.detailTitle}>{place.name}</div>
-          <button type="button" style={styles.detailStar} title="즐겨찾기(미구현)">
-            ☆
+          <button
+            type="button"
+            style={styles.detailStar}
+            title={isAuthed ? "즐겨찾기" : "로그인 후 즐겨찾기 가능"}
+            onClick={async () => {
+              try {
+                await toggle(place.kakaoId, place.name);
+              } catch (e) {
+                if (e?.code === "LOGIN_REQUIRED") {
+                  alert("즐겨찾기는 로그인 후 사용할 수 있어요.");
+                } else {
+                  alert(e?.message || "즐겨찾기 처리 실패");
+                }
+              }
+            }}
+          >
+            {isBookmarked(place.kakaoId) ? "★" : "☆"}
           </button>
         </div>
 
@@ -717,19 +801,22 @@ function PlaceDetailPanel({ place, onBack, onCenterTo, onRoute }) {
       </div>
 
       <div style={styles.detailMetaRow2}>
-        <div style={styles.detailMetaItem2}>거리 {formatDistance(place.distM)}</div>
         <div style={styles.detailMetaItem2}>
-          {loading ? "영업 정보 불러오는 중..." : error ? "영업 정보 오류" : "영업 정보"}
+          거리 {formatDistance(place.distM)}
+        </div>
+        <div style={styles.detailMetaItem2}>
+          {loading
+            ? "영업 정보 불러오는 중..."
+            : error
+            ? "영업 정보 오류"
+            : "영업 정보"}
         </div>
       </div>
 
-      <div style={styles.detailPhotos2}>
-        <div style={styles.detailPhotoBox2}>카페사진1</div>
-        <div style={styles.detailPhotoBox2}>카페사진2</div>
-      </div>
-
       <div style={styles.detailInfo2}>
-        <div style={styles.detailInfoRow2}>주소: {place.address || "주소 정보 없음"}</div>
+        <div style={styles.detailInfoRow2}>
+          주소: {place.address || "주소 정보 없음"}
+        </div>
 
         <div style={styles.detailInfoRow2}>
           현재 상태:{" "}
@@ -759,11 +846,22 @@ function PlaceDetailPanel({ place, onBack, onCenterTo, onRoute }) {
 
         <div style={styles.detailInfoRow2}>
           종료까지{" "}
-          {loading ? "불러오는 중..." : error ? "-" : remainText ? remainText : "-"}
+          {loading
+            ? "불러오는 중..."
+            : error
+            ? "-"
+            : remainText
+            ? remainText
+            : "-"}
         </div>
 
         {place.url ? (
-          <a href={place.url} target="_blank" rel="noreferrer" style={styles.kakaoLink}>
+          <a
+            href={place.url}
+            target="_blank"
+            rel="noreferrer"
+            style={styles.kakaoLink}
+          >
             카카오 장소페이지 열기
           </a>
         ) : null}
@@ -771,7 +869,11 @@ function PlaceDetailPanel({ place, onBack, onCenterTo, onRoute }) {
 
       <div style={styles.detailReviewList2}>
         {Array.from({ length: 8 }).map((_, i) => (
-          <input key={i} style={styles.detailReviewInput2} placeholder="방문자 리뷰" />
+          <input
+            key={i}
+            style={styles.detailReviewInput2}
+            placeholder="방문자 리뷰"
+          />
         ))}
       </div>
 
@@ -813,8 +915,6 @@ function escapeHtml(s) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 }
-
-
 
 /* styles */
 const PINK = "#84DEEE";
@@ -940,7 +1040,7 @@ const styles = {
   },
 
   rightInner: {
-    height: "100%", 
+    height: "100%",
     overflowY: "auto",
     padding: 12,
     display: "flex",
@@ -964,23 +1064,11 @@ const styles = {
     boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
   },
   cardRow: {
-    position: "relative", 
+    position: "relative",
     display: "grid",
-    gridTemplateColumns: "80px 1fr 84px ",
+    gridTemplateColumns: "150px 1fr 84px",
     gap: 10,
     alignItems: "start",
-  },
-  thumbnail: {
-    width: 80,
-    height: 80,
-    borderRadius: 10,
-    border: "1px solid #eee",
-    background: "#fafafa",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 12,
-    color: "#aaa",
   },
 
   cardBody: {
@@ -998,11 +1086,11 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: 5,
-  },          
+  },
   cardTitle: {
-     width: "100%",          // ✅ 필수
-    minWidth: 0,    
-    fontSize: 14,
+    width: "100%", // ✅ 필수
+    minWidth: 0,
+    fontSize: 16,
     fontWeight: 800,
     color: "#222",
     marginBottom: 6,
@@ -1011,8 +1099,7 @@ const styles = {
     textOverflow: "ellipsis",
     maxWidth: "100%",
   },
-  cardMeta: { marginTop: 10, fontSize: 11, color: "#666", lineHeight: 1.5 },
-
+  cardMeta: { marginTop: 10, fontSize: 12, color: "#666", lineHeight: 1.4 },
 
   routeBtn: {
     border: "none",
@@ -1121,25 +1208,8 @@ const styles = {
     background: "#fff",
   },
 
-  detailPhotos2: {
-    marginTop: 12,
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 10,
-    padding: "0 6px",
-  },
-  detailPhotoBox2: {
-    height: 120,
-    borderRadius: 14,
-    background: "#D9D9D9",
-    color: "#fff",
-    fontWeight: 900,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
   detailInfo2: {
+    textAlign: "left",
     marginTop: 12,
     padding: "0 6px",
     color: "#7A7A7A",

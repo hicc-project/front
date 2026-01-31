@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { openKakaoRouteToPlace } from "../../../utils/cafeApi";
 import { useOpen24State } from "../../../providers/Open24StateProvider";
+import { useAuth } from "../../../providers/AuthProvider";
+import { useBookmarks } from "../../../providers/BookmarksProvider";
+import moonEmptyIcon from "../../../icon/moon_empty.png";
+
 
 /* -------------------- helpers -------------------- */
 function haversineKm(lat1, lng1, lat2, lng2) {
@@ -78,17 +82,8 @@ function normalizeCafe(raw, myLoc) {
 /* -------------------- page -------------------- */
 export default function Open24Mobile() {
   const { loading, errMsg, myLoc, cafesRaw, loadOpen24 } = useOpen24State();
-
-  const [favorites, setFavorites] = useState(() => new Set());
-
-  const toggleFavorite = (id) => {
-    setFavorites((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+  const { isAuthed } = useAuth();
+  const { isBookmarked, toggle } = useBookmarks();
 
   useEffect(() => {
     loadOpen24();
@@ -108,12 +103,6 @@ export default function Open24Mobile() {
       <header style={styles.header}>
         <div style={styles.headerTitle}>24-hour cafe</div>
         <div style={styles.headerSub}>내 근처에 24시간 동안 운영하는 카페는?</div>
-
-        <div style={{ marginTop: 12 }}>
-          <button type="button" style={styles.reloadBtn} onClick={() => loadOpen24({ force: true })}>
-            새로고침
-          </button>
-        </div>
       </header>
 
       {loading ? (
@@ -126,14 +115,26 @@ export default function Open24Mobile() {
           </button>
         </div>
       ) : !nearest ? (
-        <div style={styles.stateBox}>근처 24시간 카페가 없어요.</div>
+          <div style={styles.emptyWrap}>
+            <div style={styles.emptyInner}>
+              <img src={moonEmptyIcon} alt="" style={styles.emptyIconImg} />
+              <div style={styles.emptyText}>지금 내 근처에는 24시 카페가 없어요!</div>
+            </div>
+          </div>
       ) : (
         <>
           <section style={styles.section}>
             <NearestCard
               cafe={nearest}
-              isFav={favorites.has(nearest.id)}
-              onToggleFav={() => toggleFavorite(nearest.id)}
+              isFav={isBookmarked(nearest.kakaoId)}
+              onToggleFav={async () => {
+                try {
+                  await toggle(nearest.kakaoId, nearest.name);
+                } catch (e) {
+                  if (e?.code === "LOGIN_REQUIRED") alert("즐겨찾기는 로그인 후 사용할 수 있어요.");
+                  else alert(e?.message || "즐겨찾기 처리 실패");
+                }
+              }}
               onRoute={() => openKakaoRouteToPlace(nearest.placeForRoute)}
             />
           </section>
@@ -145,8 +146,15 @@ export default function Open24Mobile() {
                 <CafeCard
                   key={c.id}
                   cafe={c}
-                  isFav={favorites.has(c.id)}
-                  onToggleFav={() => toggleFavorite(c.id)}
+                  isFav={isBookmarked(c.kakaoId)}
+                  onToggleFav={async () => {
+                    try {
+                      await toggle(c.kakaoId,  c.name);
+                    } catch (e) {
+                      if (e?.code === "LOGIN_REQUIRED") alert("즐겨찾기는 로그인 후 사용할 수 있어요.");
+                      else alert(e?.message || "즐겨찾기 처리 실패");
+                    }
+                  }}
                   onRoute={() => openKakaoRouteToPlace(c.placeForRoute)}
                 />
               ))}
@@ -197,8 +205,6 @@ function NearestCard({ cafe, isFav, onToggleFav, onRoute }) {
           </div>
 
           <div style={styles.metaText}>거리 {(cafe.distanceKm ?? 0).toFixed(2)} km</div>
-          <div style={styles.metaText}>영업시간 {cafe.hours}</div>
-          <div style={styles.metaText}>리뷰 {cafe.reviews}</div>
         </div>
       </div>
 
@@ -242,8 +248,6 @@ function CafeCard({ cafe, isFav, onToggleFav, onRoute }) {
           </div>
 
           <div style={styles.cardMeta}>거리 {(cafe.distanceKm ?? 0).toFixed(2)} km</div>
-          <div style={styles.cardMeta}>영업시간 {cafe.hours}</div>
-          <div style={styles.cardMeta}>리뷰 {cafe.reviews}</div>
         </div>
       </div>
     </div>
@@ -443,4 +447,34 @@ const styles = {
     fontWeight: 900,
     color: TEXT,
   },
+  emptyWrap: {
+  flex: 1,
+  minHeight: 340,           // 모바일 중앙정렬 영역
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "28px 16px",
+  },
+
+  emptyInner: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    opacity: 0.95,
+  },
+
+  emptyIconImg: {
+    width: 56,
+    height: 44,
+    opacity: 0.7,
+    flexShrink: 0,
+  },
+
+  emptyText: {
+    fontSize: 15,
+    fontWeight: 700,
+    color: "#555",
+    lineHeight: 1.35,
+  },
+
 };

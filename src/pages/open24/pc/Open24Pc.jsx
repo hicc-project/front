@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { openKakaoRouteToPlace } from "../../../utils/cafeApi";
 import { useOpen24State } from "../../../providers/Open24StateProvider";
+import { useAuth } from "../../../providers/AuthProvider";
+import { useBookmarks } from "../../../providers/BookmarksProvider";
+import moonEmptyIcon from "../../../icon/moon_empty.png";
+
 
 /* -------------------- helpers -------------------- */
 function haversineKm(lat1, lng1, lat2, lng2) {
@@ -73,22 +77,24 @@ function normalizeCafe(raw, myLoc) {
 /* -------------------- component -------------------- */
 export default function Open24Pc() {
   const { loading, errMsg, myLoc, cafesRaw, loadOpen24 } = useOpen24State();
+  const { isAuthed } = useAuth();
+  const { isBookmarked, toggle } = useBookmarks();
 
   // ✅ 페이지 진입 시 로드 (TTL이면 Provider가 네트워크 스킵)
   useEffect(() => {
     loadOpen24();
   }, [loadOpen24]);
 
-  // 즐겨찾기(현재는 페이지 로컬. 원하면 FavoritesProvider와 연결 가능)
-  const [favorites, setFavorites] = useState(() => new Set());
-
-  const toggleFavorite = (id) => {
-    setFavorites((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const onToggleBookmark = async (cafeName) => {
+    try {
+      await toggle(cafeName);
+    } catch (e) {
+      if (e?.code === "LOGIN_REQUIRED") {
+        alert("즐겨찾기는 로그인 후 사용할 수 있어요.");
+      } else {
+        alert(e?.message || "즐겨찾기 처리 실패");
+      }
+    }
   };
 
   const { nearest, rest } = useMemo(() => {
@@ -104,11 +110,6 @@ export default function Open24Pc() {
         <div style={styles.heroInner}>
           <div style={styles.heroTitle}>24-hour cafe</div>
           <div style={styles.heroSub}>내 근처에 24시간 동안 운영하는 카페는?</div>
-
-          {/* ✅ 너 UI에서 쓰던 새로고침 버튼 느낌 유지하려면 여기서 추가해도 됨 */}
-          <button type="button" style={styles.refreshBtn} onClick={() => loadOpen24({ force: true })}>
-            새로고침
-          </button>
         </div>
       </header>
 
@@ -123,15 +124,32 @@ export default function Open24Pc() {
             </button>
           </div>
         ) : !nearest ? (
-          <div style={styles.stateBox}>근처 24시간 카페가 없어요.</div>
+          <div style={styles.emptyWrap}>
+            <div style={styles.emptyInner}>
+              <img
+                src={moonEmptyIcon}
+                alt=""
+                style={styles.emptyIconImg}
+              />
+
+              <div style={styles.emptyText}>지금 내 근처에는 24시 카페가 없어요!</div>
+            </div>
+          </div>
         ) : (
           <div style={styles.grid}>
             {/* Left: nearest */}
             <div style={styles.left}>
               <NearestCard
                 cafe={nearest}
-                isFav={favorites.has(nearest.id)}
-                onToggleFav={() => toggleFavorite(nearest.id)}
+                isFav={isBookmarked(nearest.kakaoId)}
+                onToggleFav={async () => {
+                  try {
+                    await toggle(nearest.kakaoId, nearest.name);
+                  } catch (e) {
+                    if (e?.code === "LOGIN_REQUIRED") alert("즐겨찾기는 로그인 후 사용할 수 있어요.");
+                    else alert(e?.message || "즐겨찾기 처리 실패");
+                  }
+                }}
                 onRoute={() => openKakaoRouteToPlace(nearest)}
               />
             </div>
@@ -143,8 +161,15 @@ export default function Open24Pc() {
                   <CafeRow
                     key={c.id}
                     cafe={c}
-                    isFav={favorites.has(c.id)}
-                    onToggleFav={() => toggleFavorite(c.id)}
+                    isFav={isBookmarked(c.kakaoId)}
+                    onToggleFav={async () => {
+                      try {
+                        await toggle(c.kakaoId, c.name);
+                      } catch (e) {
+                        if (e?.code === "LOGIN_REQUIRED") alert("즐겨찾기는 로그인 후 사용할 수 있어요.");
+                        else alert(e?.message || "즐겨찾기 처리 실패");
+                      }
+                    }}
                     onRoute={() => openKakaoRouteToPlace(c)}
                   />
                 ))}
@@ -197,8 +222,6 @@ function NearestCard({ cafe, isFav, onToggleFav, onRoute }) {
 
           <div style={styles.metaRight}>
             <div style={styles.metaText}>거리 {(cafe.distanceKm ?? 0).toFixed(2)} km</div>
-            <div style={styles.metaText}>영업시간 {cafe.hours}</div>
-            <div style={styles.metaText}>리뷰 {cafe.reviews}</div>
           </div>
         </div>
       </div>
@@ -223,8 +246,6 @@ function CafeRow({ cafe, isFav, onToggleFav, onRoute }) {
         <div style={styles.rowBody}>
           <div style={styles.rowName}>{cafe.name}</div>
           <div style={styles.rowMeta}>거리 {(cafe.distanceKm ?? 0).toFixed(2)} km</div>
-          <div style={styles.rowMeta}>영업시간 {cafe.hours}</div>
-          <div style={styles.rowMeta}>리뷰 {cafe.reviews}</div>
         </div>
       </div>
 
@@ -301,17 +322,7 @@ const styles = {
   },
   heroSub: { marginTop: 10, fontSize: 18, color: "#6B6B6B", fontWeight: 500 },
 
-  refreshBtn: {
-    textAlign: "left",  
-    marginTop: 14,
-    padding: "10px 18px",
-    borderRadius: 14,
-    border: `1px solid ${PINK}`,
-    background: "#fff",
-    cursor: "pointer",
-    fontWeight: 800,
-    color: "#4A4A4A",
-  },
+
 
   content: { flex: 1, overflow: "hidden", padding: "18px 22px 22px 22px" },
 
@@ -500,4 +511,33 @@ const styles = {
     fontWeight: 800,
     color: "#4A4A4A",
   },
+  emptyWrap: {
+  minHeight: 420,            
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "40px 16px",
+  },
+
+  emptyInner: {
+    display: "flex",
+    alignItems: "center",
+    gap: 14,
+    opacity: 0.95,
+  },
+
+  emptyIconImg: {
+    width: 64,
+    height: 50,
+    opacity: 0.7,
+    flexShrink: 0,
+  },
+
+
+  emptyText: {
+    fontSize: 18,
+    fontWeight: 600,
+    color: "#555",
+  },
+
 };

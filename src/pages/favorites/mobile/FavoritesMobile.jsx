@@ -3,36 +3,14 @@ import React, { useMemo, useState, useRef, useEffect } from "react";
 
 import locationIcon from "../../../icon/Location.png";
 import shareIcon from "../../../icon/Share.png";
+import { useAuth } from "../../../providers/AuthProvider";
+import { useBookmarks } from "../../../providers/BookmarksProvider";
 
 export default function FavoritesMobile() {
-  const initial = useMemo(
-    () => [
-      {
-        id: "m1",
-        name: "카페이름",
-        hours: "00:00 - 00:00",
-        reviews: "0,000개",
-        memo: "",
-      },
-      {
-        id: "m2",
-        name: "카페이름",
-        hours: "00:00 - 00:00",
-        reviews: "0,000개",
-        memo: "",
-      },
-      {
-        id: "m3",
-        name: "카페이름",
-        hours: "00:00 - 00:00",
-        reviews: "0,000개",
-        memo: "",
-      },
-    ],
-    []
-  );
+  const { isAuthed } = useAuth();
+  const { items: bookmarks, loading, error, refresh, toggle } = useBookmarks();
 
-  const [items, setItems] = useState(initial);
+  const [memoByName, setMemoByName] = useState({});
 
   /* ---------- sort ---------- */
   const [sortKey, setSortKey] = useState("이름순");
@@ -47,10 +25,21 @@ export default function FavoritesMobile() {
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
 
-  const onMemoChange = (id, v) => {
-    setItems((prev) =>
-      prev.map((it) => (it.id === id ? { ...it, memo: v } : it))
-    );
+  const cafes = useMemo(() => {
+    const arr = bookmarks.map((b) => ({
+      id: b.id,
+      kakaoId: b.kakao_id,
+      name: b.cafe_name,
+      hours: "영업시간 정보 없음",
+      memo: memoByName[b.kakao_id] ?? "",
+    }));
+
+    if (sortKey === "이름순") arr.sort((a, b) => a.name.localeCompare(b.name, "ko"));
+    return arr;
+  }, [bookmarks, memoByName, sortKey]);
+
+  const onMemoChange = (cafeName, v) => {
+    setMemoByName((prev) => ({ ...prev, [cafeName]: v }));
   };
 
   return (
@@ -79,7 +68,7 @@ export default function FavoritesMobile() {
 
         {open && (
           <div style={styles.dropdown}>
-            {["이름순", "추천순", "거리순"].map((k) => (
+            {["이름순", "거리순"].map((k) => (
               <button
                 key={k}
                 type="button"
@@ -101,13 +90,35 @@ export default function FavoritesMobile() {
 
       {/* List */}
       <div style={styles.list}>
-        {items.map((cafe) => (
-          <MobileRow
-            key={cafe.id}
-            cafe={cafe}
-            onMemoChange={onMemoChange}
-          />
-        ))}
+        {!isAuthed ? (
+          <div style={styles.emptyBox}>즐겨찾기는 로그인 후 사용할 수 있어요.</div>
+        ) : loading ? (
+          <div style={styles.emptyBox}>불러오는 중...</div>
+        ) : error ? (
+          <div style={styles.emptyBox}>
+            <div style={{ marginBottom: 10 }}>{error}</div>
+            <button type="button" style={styles.retryBtn} onClick={() => refresh({ force: true })}>
+              다시 시도
+            </button>
+          </div>
+        ) : cafes.length === 0 ? (
+          <div style={styles.emptyBox}>아직 즐겨찾기한 카페가 없어요.</div>
+        ) : (
+          cafes.map((cafe) => (
+            <MobileRow
+              key={cafe.id}
+              cafe={cafe}
+              onMemoChange={onMemoChange}
+              onToggleFav={async () => {
+                try {
+                  await toggle(cafe.kakaoId, cafe.name);
+                } catch (e) {
+                  alert(e?.message || "즐겨찾기 처리 실패");
+                }
+              }}
+            />
+          ))
+        )}
       </div>
     </div>
   );
@@ -115,16 +126,17 @@ export default function FavoritesMobile() {
 
 /* ---------------- Row ---------------- */
 
-function MobileRow({ cafe, onMemoChange }) {
+function MobileRow({ cafe, onMemoChange, onToggleFav }) {
   return (
     <div style={styles.row}>
       <div style={styles.rowTop}>
         <div style={styles.left}>
-          <span style={styles.rowStar}>★</span>
+          <button type="button" onClick={onToggleFav} style={styles.rowStarBtn} title="즐겨찾기 삭제">
+            ★
+          </button>
           <div style ={styles.rowBody}>
             <div style={styles.name}>{cafe.name}</div>
             <div style={styles.meta}>영업시간 {cafe.hours}</div>
-            <div style={styles.meta}>리뷰 {cafe.reviews}</div>
           </div>
         </div>
 
@@ -145,7 +157,7 @@ function MobileRow({ cafe, onMemoChange }) {
       <div style={styles.bubble}>
         <input
           value={cafe.memo}
-          onChange={(e) => onMemoChange(cafe.id, e.target.value)}
+          onChange={(e) => onMemoChange(cafe.kakaoId, e.target.value)}
           placeholder="나의 한마디"
           style={styles.bubbleInput}
         />
@@ -173,8 +185,8 @@ const styles = {
   header: { padding: "18px 16px 10px" },
   headerRow: { display: "flex", gap: 10, alignItems: "center" },
   headerStar: { fontSize: 26, color: PINK },
-  title: { fontSize: 20, fontWeight: 900, color: TEXT },
-  subTitle: { fontSize: 13, color: SUB },
+  title: { fontSize: 20, fontWeight: 900, color: TEXT,textAlign: "left" },
+  subTitle: { fontSize: 11, color: SUB },
 
   /* sort */
   sortBar: {
@@ -238,6 +250,28 @@ const styles = {
   },
   left: { display: "flex", gap: 10 },
   rowStar: { color: PINK, fontSize: 22 },
+  rowStarBtn: {
+    color: PINK,
+    fontSize: 22,
+    border: "none",
+    background: "transparent",
+    cursor: "pointer",
+    padding: 0,
+  },
+
+  emptyBox: {
+    padding: "18px 16px",
+    color: SUB,
+    fontWeight: 700,
+  },
+  retryBtn: {
+    border: "1px solid #82DAEB",
+    background: "#fff",
+    borderRadius: 10,
+    padding: "8px 12px",
+    cursor: "pointer",
+    fontWeight: 800,
+  },
   name: { fontSize: 16, fontWeight: 900, color: TEXT },
   meta: { fontSize: 12, color: SUB, marginTop: 4 },
 

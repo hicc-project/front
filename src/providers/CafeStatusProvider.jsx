@@ -22,7 +22,7 @@ import { collectDetails, refreshStatus, fetchOpenStatusLogs } from "../utils/caf
 
 const CafeStatusCtx = createContext(null);
 
-const DEFAULT_LOGS_TTL_MS = 30_000; // logs 폴링 주기
+const DEFAULT_LOGS_TTL_MS = 10_000; // logs 폴링 주기
 const DEFAULT_WARMUP_COOLDOWN_MS = 240_000; // warmup 쿨다운(4분)
 const RETRY_AFTER_WARMUP_ATTEMPTS = 3; // warmup 후 강제 logs 재시도 횟수
 const RETRY_AFTER_WARMUP_DELAY_MS = 1200; // warmup 후 재시도 간격(ms)
