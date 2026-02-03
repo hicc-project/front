@@ -4,6 +4,14 @@ import bakeryicon from "../../../icon/bakeryicon.png";
 import drinkicon from "../../../icon/drinkicon.png";
 import desserticon from "../../../icon/desserticon.png";
 import { cafes } from "../cafes.js";
+import { bakerys, drinks, desserts } from "../menus.js";
+
+function pick3Distinct(len) {
+  if (len < 3) throw new Error("len must be >= 3");
+  const s = new Set();
+  while (s.size < 3) s.add(Math.floor(Math.random() * len));
+  return [...s];
+}
 
 function pick2Distinct(len) {
   const a = Math.floor(Math.random() * len);
@@ -15,10 +23,44 @@ function pick2Distinct(len) {
 export default function HomePc() {
   const [selected, setSelected] = useState([]);
 
+  // 메뉴 3종(Drink/Dessert/Bakery) 각각 랜덤 1개씩
+  const [menuPick, setMenuPick] = useState({
+    drink: null,
+    dessert: null,
+    bakery: null,
+  });
+
   useEffect(() => {
-    if (!Array.isArray(cafes) || cafes.length < 2) return;
-    const [a, b] = pick2Distinct(cafes.length);
-    setSelected([cafes[a], cafes[b]]);
+    // 우측 카페 2개
+    if (Array.isArray(cafes) && cafes.length >= 2) {
+      const [a, b] = pick2Distinct(cafes.length);
+      setSelected([cafes[a], cafes[b]]);
+    }
+
+    // 좌측 메뉴: menus.js에서 "서로 다른 인덱스 3개" 뽑아
+    // 각 카테고리(drinks/desserts/bakerys)에 각각 1개씩 매핑
+    const minLen = Math.min(
+      Array.isArray(drinks) ? drinks.length : 0,
+      Array.isArray(desserts) ? desserts.length : 0,
+      Array.isArray(bakerys) ? bakerys.length : 0
+    );
+
+    if (minLen >= 3) {
+      const [i, j, k] = pick3Distinct(minLen);
+      setMenuPick({
+        drink: drinks[i],
+        dessert: desserts[j],
+        bakery: bakerys[k],
+      });
+    } else {
+      // 길이가 부족하면 각 배열에서 0번(있으면)으로 폴백
+      setMenuPick({
+        drink: Array.isArray(drinks) && drinks.length ? drinks[0] : null,
+        dessert:
+          Array.isArray(desserts) && desserts.length ? desserts[0] : null,
+        bakery: Array.isArray(bakerys) && bakerys.length ? bakerys[0] : null,
+      });
+    }
   }, []);
 
   return (
@@ -33,21 +75,34 @@ export default function HomePc() {
         <div className="panel">
           <div className="panelHeader">
             <div className="panelTitle">How About This Menu!</div>
-            <div className="panelSub"> 이 메뉴는 어떤가요! </div>
           </div>
 
           <div className="list">
-            <div className="threeblocks">
-              <img src={drinkicon} alt="음료" className="threeicons" />
-              <div>녹차라떼</div>
+            {/* Drink */}
+            <div className="menuRow">
+              <div className="menuLeft">
+                <img src={drinkicon} alt="drink" className="menuIcon" />
+                <div className="menuLabel">Drink</div>
+              </div>
+              <div className="menuInputBox">{menuPick.drink?.name ?? ""}</div>
             </div>
-            <div className="threeblocks">
-              <img src={bakeryicon} alt="제빵" className="threeicons" />
-              <div>앙버터</div>
+
+            {/* Dessert */}
+            <div className="menuRow">
+              <div className="menuLeft">
+                <img src={desserticon} alt="dessert" className="menuIcon" />
+                <div className="menuLabel">Dessert</div>
+              </div>
+              <div className="menuInputBox">{menuPick.dessert?.name ?? ""}</div>
             </div>
-            <div className="threeblocks">
-              <img src={desserticon} alt="디저트" className="threeicons" />
-              <div>당근케이크</div>
+
+            {/* Bakery */}
+            <div className="menuRow">
+              <div className="menuLeft">
+                <img src={bakeryicon} alt="bakery" className="menuIcon" />
+                <div className="menuLabel">Bakery</div>
+              </div>
+              <div className="menuInputBox">{menuPick.bakery?.name ?? ""}</div>
             </div>
           </div>
         </div>
@@ -61,8 +116,6 @@ export default function HomePc() {
           <div className="cardRow">
             {selected.map((cafe) => (
               <div className="cafeCard" key={cafe.id}>
-                <div className="cafeTag">{cafe.tag}</div>
-
                 <div className="cafeImgPlaceholder">
                   <img
                     src={new URL(
@@ -108,6 +161,65 @@ export default function HomePc() {
           </div>
         </div>
       </section>
+
+      {/* 페이지 하단에 CSS 삽입 */}
+      <style>{`
+  /* 좌측 메뉴(How About This Menu!) - 전체 축소 버전 */
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    padding: 4px 0px 0px;
+  }
+
+  .menuRow {
+    display: grid;
+    grid-template-columns: 220px 1fr;  /* 좌측 폭 축소 */
+    align-items: center;
+    column-gap: 0px;
+    padding: 12px 0px;                /* 행 높이 축소 */
+    border-top: 1px solid #6a6a6a;     /* 선 두께 축소 */
+  }
+
+  .menuRow:first-child {
+    border-top: none;
+  }
+
+  .menuLeft {
+    display: flex;
+    align-items: center;
+    gap: 14px;                        /* 간격 축소 */
+    padding-left: 8px;                /* 좌측 여백 축소 */
+  }
+
+  .menuIcon {
+    width: 58px;                      /* 아이콘 축소 */
+    height: 58px;
+    object-fit: contain;
+    display: block;
+    flex-shrink: 0;
+  }
+
+  .menuLabel {
+    font-size: 18px;                  /* 라벨 축소 */
+    font-weight: 700;
+    color: #111;
+  }
+
+  .menuInputBox {
+    height: auto;
+    background: transparent;
+    border-radius: 0px;
+    padding: 0 12px 0 0;              /* 우측 여백 축소 */
+    display: flex;
+    align-items: left;
+    justify-content: flex-end;
+    box-sizing: border-box;
+    font-size: 16px;                  /* 메뉴명 축소 */
+    font-weight: 300;
+    color: #000000;
+  }
+`}</style>
     </div>
   );
 }
