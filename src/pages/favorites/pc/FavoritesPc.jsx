@@ -1,4 +1,3 @@
-// src/pages/favorites/pc/FavoritesPc.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import locationIcon from "../../../icon/Location.png";
@@ -6,19 +5,23 @@ import shareIcon from "../../../icon/Share.png";
 import { useAuth } from "../../../providers/AuthProvider";
 import { useBookmarks } from "../../../providers/BookmarksProvider";
 
+const PINK = "#84DEEE";
+const LINE = "#E9E9E9";
+const TEXT = "#4A4A4A";
+const SUB = "#7A7A7A";
+
 export default function FavoritesPC() {
   const { isAuthed } = useAuth();
-  const { items: bookmarks, loading, error, refresh, toggle } = useBookmarks();
+  const { items: bookmarks, loading, error, refresh, toggle, saveMemo } = useBookmarks();
 
-  // 메모는 백엔드에 저장 안하니까 프론트 로컬로만 관리(카페 이름 기준)
-  const [memoByName, setMemoByName] = useState({});
-
-  
   const [sortKey, setSortKey] = useState("이름순");
   const [open, setOpen] = useState(false);
   const sortRef = useRef(null);
 
-  
+  // ✅ 메모 입력 draft (kakaoId 기준)
+  const [memoDraft, setMemoDraft] = useState({}); // { [kakaoId]: string }
+  const [saving, setSaving] = useState({}); // { [kakaoId]: boolean }
+
   useEffect(() => {
     const onClick = (e) => {
       if (!sortRef.current?.contains(e.target)) setOpen(false);
@@ -27,29 +30,89 @@ export default function FavoritesPC() {
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
 
+  // ✅ 서버에서 내려온 memo로 draft 초기 세팅(이미 입력중인 건 유지)
+  useEffect(() => {
+    setMemoDraft((prev) => {
+      const next = { ...prev };
+      for (const b of bookmarks) {
+        const kid = String(b.kakao_id ?? "").trim();
+        if (!kid) continue;
+        if (next[kid] === undefined) next[kid] = b.memo ?? "";
+      }
+      return next;
+    });
+  }, [bookmarks]);
+
   const sortedItems = useMemo(() => {
     const arr = bookmarks.map((b) => ({
       id: b.id,
-      kakaoId: b.kakao_id,
-      name: b.cafe_name,
+      kakaoId: String(b.kakao_id ?? ""),
+      name: b.cafe_name ?? "",
       hours: "영업시간 정보 없음",
-      memo: memoByName[b.cafe_name] ?? "",
+      memo: b.memo ?? "",
     }));
 
-    // 실제 데이터 붙이면 여기 로직만 바꾸면 됨
     if (sortKey === "이름순") {
-      arr.sort((a, b) => a.name.localeCompare(b.name, "ko"));
-
+      arr.sort((a, b) => (a.name || "").localeCompare(b.name || "", "ko"));
     } else if (sortKey === "거리순") {
-      // 지금은 거리 데이터 없어서 "그대로"
-      // 나중에 distM 같은 값 생기면 여기에 sort 넣으면 됨
+      // 거리 데이터 없으니 유지
     }
 
     return arr;
-  }, [bookmarks, memoByName, sortKey]);
+  }, [bookmarks, sortKey]);
 
-  const updateMemo = (kakaoId, memo) => {
-    setMemoByName((prev) => ({ ...prev, [kakaoId]: memo }));
+  const onChangeMemo = (kakaoId, value) => {
+    const kid = String(kakaoId || "").trim();
+    if (!kid) return;
+    setMemoDraft((prev) => ({ ...prev, [kid]: value }));
+  };
+
+  // ✅ 현재 bookmarks(상태)에서 kakaoId로 bookmarkId 찾기
+  const findBookmarkIdByKakaoId = (kakaoId) => {
+    const kid = String(kakaoId || "").trim();
+    if (!kid) return null;
+    const found = bookmarks.find((b) => String(b.kakao_id ?? "") === kid);
+    const id = found?.id;
+    if (!id) return null;
+    if (String(id).startsWith("temp_")) return null;
+    return id;
+  };
+
+  const onSaveMemo = async (cafe) => {
+    const kid = String(cafe?.kakaoId || "").trim();
+    if (!kid) return;
+
+    const text = memoDraft[kid] ?? "";
+
+    try {
+      setSaving((prev) => ({ ...prev, [kid]: true }));
+
+      // 1) 우선 row에 달린 id 사용 시도
+      let bookmarkId = cafe?.id;
+      if (!bookmarkId || String(bookmarkId).startsWith("temp_")) bookmarkId = null;
+
+      // 2) id가 없거나 temp면, 최신 목록 강제 refresh 후 다시 찾기
+      if (!bookmarkId) {
+        await refresh({ force: true });
+        bookmarkId = findBookmarkIdByKakaoId(kid);
+      }
+
+      if (!bookmarkId) {
+        // 여기 오면 서버에 즐겨찾기가 없는 상태(이미 삭제됐거나 sync 깨짐)
+        alert("즐겨찾기 id를 찾을 수 없어요. (이미 삭제되었을 수 있어요)");
+        return;
+      }
+
+      await saveMemo({ bookmarkId, memo: text });
+
+      // ✅ 완전 싱크
+      await refresh({ force: true });
+      alert("메모가 저장되었습니다.");
+    } catch (e) {
+      alert(e?.message || "메모 저장 실패");
+    } finally {
+      setSaving((prev) => ({ ...prev, [kid]: false }));
+    }
   };
 
   return (
@@ -64,13 +127,8 @@ export default function FavoritesPC() {
         </div>
       </header>
 
-      {/*  Sort bar: v 고정 + dropdown */}
       <div style={styles.sortBar} ref={sortRef}>
-        <button
-          type="button"
-          style={styles.sortBtn}
-          onClick={() => setOpen((v) => !v)}
-        >
+        <button type="button" style={styles.sortBtn} onClick={() => setOpen((v) => !v)}>
           <span style={styles.sortArrow}>V</span>
           <span>{sortKey}</span>
         </button>
@@ -81,10 +139,7 @@ export default function FavoritesPC() {
               <button
                 key={k}
                 type="button"
-                style={{
-                  ...styles.dropItem,
-                  ...(k === sortKey ? styles.dropActive : null),
-                }}
+                style={{ ...styles.dropItem, ...(k === sortKey ? styles.dropActive : null) }}
                 onClick={() => {
                   setSortKey(k);
                   setOpen(false);
@@ -112,31 +167,40 @@ export default function FavoritesPC() {
         ) : sortedItems.length === 0 ? (
           <div style={styles.emptyBox}>아직 즐겨찾기한 카페가 없어요.</div>
         ) : (
-          sortedItems.map((cafe, idx) => (
-            <FavoriteRow
-              key={cafe.id}
-              cafe={cafe}
-              placeholder={idx === 0 ? "내 메모" : "나의 한마디"}
-              onMemoChange={(v) => updateMemo(cafe.kakaoId, v)}
-              onToggleFav={async () => {
-                try {
-                  await toggle(cafe.kakaoId,cafe.name);
-                } catch (e) {
-                  alert(e?.message || "즐겨찾기 처리 실패");
-                }
-              }}
-            />
-          ))
+          sortedItems.map((cafe, idx) => {
+            const kid = cafe.kakaoId;
+            const draft = memoDraft[kid] ?? cafe.memo ?? "";
+            const isSaving = !!saving[kid];
+
+            return (
+              <FavoriteRow
+                key={cafe.id ?? `${kid}_${idx}`}
+                cafe={cafe}
+                memoValue={draft}
+                placeholder={idx === 0 ? "내 메모" : "나의 한마디"}
+                saving={isSaving}
+                onMemoChange={(v) => onChangeMemo(kid, v)}
+                onSaveMemo={() => onSaveMemo(cafe)}
+                onToggleFav={async () => {
+                  try {
+                    await toggle(kid, cafe.name);
+                    await refresh({ force: true });
+                  } catch (e) {
+                    alert(e?.message || "즐겨찾기 처리 실패");
+                  }
+                }}
+              />
+            );
+          })
         )}
       </div>
     </div>
   );
 }
 
-function FavoriteRow({ cafe, placeholder, onMemoChange, onToggleFav }) {
+function FavoriteRow({ cafe, memoValue, placeholder, saving, onMemoChange, onSaveMemo, onToggleFav }) {
   return (
     <div style={styles.row}>
-      {/* Left */}
       <div style={styles.leftBlock}>
         <button type="button" onClick={onToggleFav} style={styles.rowStarBtn} title="즐겨찾기 삭제">
           ★
@@ -147,7 +211,6 @@ function FavoriteRow({ cafe, placeholder, onMemoChange, onToggleFav }) {
         </div>
       </div>
 
-      {/* Mid */}
       <div style={styles.midBlock}>
         <div style={styles.midIconsRow}>
           <button type="button" style={styles.imgIconBtn} title="위치">
@@ -158,17 +221,22 @@ function FavoriteRow({ cafe, placeholder, onMemoChange, onToggleFav }) {
           </button>
         </div>
 
-        <button type="button" style={styles.memoPlus}>
-          메모+
+        <button
+          type="button"
+          style={{ ...styles.memoPlus, ...(saving ? { opacity: 0.7, cursor: "not-allowed" } : null) }}
+          disabled={saving}
+          onClick={onSaveMemo}
+          title="메모 저장"
+        >
+          {saving ? "저장중..." : "메모+"}
         </button>
       </div>
 
-      {/* Right */}
       <div style={styles.memoWrap}>
         <div style={styles.bubble}>
           <div style={styles.bubbleTail} aria-hidden="true" />
           <input
-            value={cafe.memo}
+            value={memoValue}
             onChange={(e) => onMemoChange(e.target.value)}
             placeholder={placeholder}
             style={styles.memoInput}
@@ -179,12 +247,7 @@ function FavoriteRow({ cafe, placeholder, onMemoChange, onToggleFav }) {
   );
 }
 
-/* -------------------- Styles -------------------- */
-
-const PINK = "#84DEEE";
-const LINE = "#E9E9E9";
-const TEXT = "#4A4A4A";
-const SUB = "#7A7A7A";
+/* ---------------- styles ---------------- */
 
 const styles = {
   page: {
@@ -206,13 +269,7 @@ const styles = {
 
   brandRow: { display: "flex", alignItems: "center", gap: 14 },
   brandStar: { fontSize: 42, color: PINK, lineHeight: 1 },
-  brandTitle: {
-    fontSize: 26,
-    fontWeight: 800,
-    color: TEXT,
-    letterSpacing: 0.2,
-    textAlign: "left",
-  },
+  brandTitle: { fontSize: 26, fontWeight: 800, color: TEXT, letterSpacing: 0.2, textAlign: "left" },
   brandSub: { marginTop: 4, fontSize: 14, color: SUB, fontWeight: 600 },
 
   sortBar: {
@@ -260,14 +317,9 @@ const styles = {
     color: TEXT,
     textAlign: "left",
   },
-  dropActive: {
-    background: PINK,
-    color: "#fff",
-  },
+  dropActive: { background: PINK, color: "#fff" },
 
-  list: { 
-    flex: 1,
-    overflowY: "auto" },
+  list: { flex: 1, overflowY: "auto" },
 
   row: {
     height: 90,
@@ -279,7 +331,6 @@ const styles = {
   },
 
   leftBlock: { display: "flex", alignItems: "center", gap: 14, minWidth: 0 },
-  rowStar: { fontSize: 22, color: PINK, width: 26, textAlign: "center" },
   rowStarBtn: {
     fontSize: 22,
     color: PINK,
@@ -291,11 +342,7 @@ const styles = {
     padding: 0,
   },
 
-  emptyBox: {
-    padding: "18px 22px",
-    color: SUB,
-    fontWeight: 700,
-  },
+  emptyBox: { padding: "18px 22px", color: SUB, fontWeight: 700 },
   retryBtn: {
     border: "1px solid #82DAEB",
     background: "#fff",
@@ -305,29 +352,12 @@ const styles = {
     fontWeight: 800,
   },
 
-  info: { 
-    minWidth: 0,
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "flex-start",
-    textAlign: "left",
-  },
+  info: { minWidth: 0, display: "flex", flexDirection: "column", alignItems: "flex-start", textAlign: "left" },
   name: { fontSize: 16, fontWeight: 800, color: TEXT },
   meta: { marginTop: 4, fontSize: 12, color: SUB, fontWeight: 600 },
 
-  midBlock: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 10,
-    justifyContent: "center",
-  },
-  midIconsRow: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 0,
-  },
+  midBlock: { display: "flex", flexDirection: "column", alignItems: "center", gap: 10, justifyContent: "center" },
+  midIconsRow: { display: "flex", alignItems: "center", justifyContent: "center", gap: 0 },
 
   imgIconBtn: {
     width: 32,
@@ -341,11 +371,7 @@ const styles = {
     justifyContent: "center",
     padding: 0,
   },
-  imgIcon: {
-    width: 22,
-    height: 22,
-    objectFit: "contain",
-  },
+  imgIcon: { width: 22, height: 22, objectFit: "contain" },
 
   memoPlus: {
     height: 34,
