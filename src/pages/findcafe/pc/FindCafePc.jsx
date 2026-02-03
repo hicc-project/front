@@ -438,22 +438,12 @@ function MapLayout() {
 
     loadPlacesFromBackendByBrowser(distanceKm).catch((e) => {
       console.error(e);
-      alert(
-        "collect/places 요청에 실패했습니다. 콘솔/네트워크를 확인해주세요."
-      );
+
       setIsMyLocationMode(false);
     });
   }, [isMyLocationMode]);
 
-  // ✅ 거리 변경 시(내 위치 모드일 때만) 재로드
-  useEffect(() => {
-    if (!isMyLocationMode) return;
 
-    loadPlacesFromBackendByBrowser(distanceKm).catch((e) => {
-      console.error(e);
-      alert("거리 변경 후 요청에 실패했습니다.");
-    });
-  }, [distanceKm, isMyLocationMode]);
 
   async function handleGoMyLocation() {
     // 토글 OFF

@@ -9,22 +9,30 @@ import React, {
   useState,
 } from "react";
 import { useAuth } from "./AuthProvider";
-import { addBookmark, deleteBookmark, fetchBookmarks } from "../utils/bookmarkApi";
+import {
+  addBookmark,
+  deleteBookmark,
+  fetchBookmarks,
+  patchBookmarkMemo, //  추가
+} from "../utils/bookmarkApi";
 
 const BookmarksContext = createContext(null);
 
-// 백엔드가 반환하는 키 이름이 조금씩 달라도 대응
 function normalizeBookmark(raw) {
-  const id = raw?.id ?? raw?.bookmark_id ?? raw?.bookmarkId;
-  const cafe_name = raw?.cafe_name ?? raw?.cafeName ?? raw?.name;
-  const kakao_id = raw?.kakao_id ?? raw?.kakaoId ?? raw?.place_id ?? raw?.placeId;
-  return { ...raw, id, cafe_name, kakao_id };
+  const r = raw?.bookmark ? raw.bookmark : raw;
+
+  const id = r?.id ?? r?.bookmark_id ?? r?.bookmarkId;
+  const cafe_name = r?.cafe_name ?? r?.cafeName ?? r?.name; // 서버가 name으로 줄 수 있음
+  const kakao_id = r?.kakao_id ?? r?.kakaoId ?? r?.place_id ?? r?.placeId;
+
+  return { ...r, id, cafe_name, kakao_id };
 }
+
 
 export function BookmarksProvider({ children }) {
   const { token, isAuthed } = useAuth();
 
-  const [items, setItems] = useState([]); // normalized bookmarks
+  const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const lastFetchAtRef = useRef(0);
@@ -39,7 +47,6 @@ export function BookmarksProvider({ children }) {
       }
 
       const now = Date.now();
-      // 너무 자주 조회 방지(짧은 TTL)
       if (!force && now - lastFetchAtRef.current < 3_000) return;
       lastFetchAtRef.current = now;
 
@@ -47,10 +54,15 @@ export function BookmarksProvider({ children }) {
       setError("");
       try {
         const data = await fetchBookmarks({ token });
-        const arr = Array.isArray(data) ? data : data?.results ?? data?.data ?? [];
+
+        const arr = Array.isArray(data)
+          ? data
+          : data?.results ?? data?.data ?? data?.bookmarks ?? [];
+
         const normalized = arr
           .map(normalizeBookmark)
-          .filter((b) => b.id && (b.kakao_id || b.cafe_name)); // kakao_id가 우선이지만, 혹시 없으면 name이라도 남김
+          .filter((b) => b.id && (b.kakao_id || b.cafe_name));
+
         setItems(normalized);
       } catch (e) {
         setError(e?.message || "즐겨찾기 목록을 불러오지 못했습니다.");
@@ -62,11 +74,9 @@ export function BookmarksProvider({ children }) {
   );
 
   useEffect(() => {
-    // 토큰 바뀌면 목록 갱신
     refresh({ force: true });
   }, [refresh]);
 
-  // ✅ kakao_id 기준 맵
   const byKakaoId = useMemo(() => {
     const m = new Map();
     for (const b of items) {
@@ -76,17 +86,6 @@ export function BookmarksProvider({ children }) {
     return m;
   }, [items]);
 
-  // (옵션) 혹시 kakao_id가 없는 데이터도 대비용 name 맵
-  const byName = useMemo(() => {
-    const m = new Map();
-    for (const b of items) {
-      const k = b?.cafe_name != null ? String(b.cafe_name) : "";
-      if (k) m.set(k, b);
-    }
-    return m;
-  }, [items]);
-
-  // ✅ 이제 isBookmarked는 "kakaoId" 기준
   const isBookmarked = useCallback(
     (kakaoId) => {
       if (!kakaoId) return false;
@@ -95,7 +94,6 @@ export function BookmarksProvider({ children }) {
     [byKakaoId]
   );
 
-  // ✅ toggle도 (kakaoId, cafeName) 형태로 변경
   const toggle = useCallback(
     async (kakaoId, cafeName = "") => {
       if (!isAuthed) {
@@ -113,101 +111,109 @@ export function BookmarksProvider({ children }) {
 
       const existing = byKakaoId.get(kid);
 
-      // optimistic
+      // add
       if (!existing) {
         const tempId = `temp_${Date.now()}`;
-        const temp = {
-          id: tempId,
-          kakao_id: kid,
-          cafe_name: cafeName || kid,
-        };
+        const temp = { id: tempId, kakao_id: kid, cafe_name: cafeName || kid, memo: "" };
         setItems((prev) => [temp, ...prev]);
 
         try {
-          const created = await addBookmark({
-            token,
-            kakao_id: kid, // ✅ 서버가 요구
-            cafe_name: cafeName || "",
-          });
-          const norm0 = normalizeBookmark(created);
+          const created = await addBookmark({ token, kakao_id: kid, cafe_name: cafeName || "" });
 
-          // ✅ 서버 응답이 어떻든, 우리가 클릭한 kid를 진실로 박아넣기
+          // ✅ 서버가 {message, bookmark:{...}} 형태면 bookmark를 꺼내서 normalize
+          const createdObj = created?.bookmark ?? created;
+          const norm0 = normalizeBookmark(createdObj);
+
           const norm = {
             ...norm0,
             kakao_id: String(norm0.kakao_id ?? kid),
             cafe_name: norm0.cafe_name ?? cafeName ?? "",
           };
+
           setItems((prev) => {
             const withoutTemp = prev.filter((x) => x.id !== tempId);
-
-            // ✅ 같은 kakao_id 중복 제거(반드시 kid 기준)
-            const filtered = withoutTemp.filter((x) => String(x.kakao_id ?? "") !== String(norm.kakao_id));
-
+            const filtered = withoutTemp.filter(
+              (x) => String(x.kakao_id ?? "") !== String(norm.kakao_id)
+            );
             return [norm, ...filtered];
           });
 
           return { action: "added", bookmark: norm };
         } catch (e) {
-          // rollback
           setItems((prev) => prev.filter((x) => x.id !== tempId));
           throw e;
         }
-      } else {
-          // optimistic remove (kakao_id 기준)
-          setItems((prev) => prev.filter((x) => String(x.kakao_id ?? "") !== kid));
-
-          try {
-            // 1) 일단 existing에서 bookmarkId 시도
-            let bookmarkId = existing.id ?? existing.bookmark_id ?? existing.bookmarkId;
-
-            // 2) bookmarkId가 없거나 temp면: 서버에서 최신 목록을 직접 받아서 realId를 찾아서 즉시 삭제
-            if (!bookmarkId || String(bookmarkId).startsWith("temp_")) {
-              // 서버 최신 목록
-              const data = await fetchBookmarks({ token });
-              const arr = Array.isArray(data) ? data : data?.results ?? data?.data ?? [];
-              const normalized = arr.map(normalizeBookmark);
-
-              const found = normalized.find((b) => String(b.kakao_id ?? "") === kid);
-              bookmarkId = found?.id ?? found?.bookmark_id ?? found?.bookmarkId;
-
-              if (!bookmarkId) {
-                // 서버에도 이미 없으면 삭제 완료로 간주
-                return { action: "removed", bookmark: existing };
-              }
-
-              await deleteBookmark({ token, bookmark_id: bookmarkId });
-
-              // UI 상태도 서버 최신으로 맞춰주기(선택이지만 안정적)
-              refresh({ force: true });
-              return { action: "removed", bookmark: found ?? existing };
-            }
-
-            // 3) 정상 케이스
-            await deleteBookmark({ token, bookmark_id: bookmarkId });
-
-            // 선택: 서버와 싱크
-            refresh({ force: true });
-
-            return { action: "removed", bookmark: existing };
-          }catch (e) {
-          // rollback
-          setItems((prev) => [existing, ...prev]);
-          throw e;
-        }
       }
-    },  
+
+      // remove
+      setItems((prev) => prev.filter((x) => String(x.kakao_id ?? "") !== kid));
+
+      try {
+        let bookmarkId = existing.id ?? existing.bookmark_id ?? existing.bookmarkId;
+
+        if (!bookmarkId || String(bookmarkId).startsWith("temp_")) {
+          const data = await fetchBookmarks({ token });
+          const arr = Array.isArray(data)
+            ? data
+            : data?.results ?? data?.data ?? data?.bookmarks ?? [];
+          const normalized = arr.map(normalizeBookmark);
+          const found = normalized.find((b) => String(b.kakao_id ?? "") === kid);
+          bookmarkId = found?.id;
+
+          if (!bookmarkId) return { action: "removed", bookmark: existing };
+
+          await deleteBookmark({ token, bookmark_id: bookmarkId });
+          refresh({ force: true });
+          return { action: "removed", bookmark: found ?? existing };
+        }
+
+        await deleteBookmark({ token, bookmark_id: bookmarkId });
+        refresh({ force: true });
+        return { action: "removed", bookmark: existing };
+      } catch (e) {
+        setItems((prev) => [existing, ...prev]);
+        throw e;
+      }
+    },
     [isAuthed, byKakaoId, token, refresh]
   );
 
+  // ✅ 추가: 메모 저장 (PATCH) 후 items를 서버 응답으로 갱신
+  const saveMemo = useCallback(
+    async ({ bookmarkId, memo }) => {
+      if (!isAuthed) {
+        const err = new Error("LOGIN_REQUIRED");
+        err.code = "LOGIN_REQUIRED";
+        throw err;
+      }
+      if (!bookmarkId) {
+        const err = new Error("bookmark_id가 필요합니다.");
+        err.code = "BOOKMARK_ID_REQUIRED";
+        throw err;
+      }
 
+      const res = await patchBookmarkMemo({ token, bookmark_id: bookmarkId, memo });
 
-  // (옵션) 혹시 즐겨찾기 페이지에서 이름으로 찾고 싶은 경우를 위한 헬퍼
-  const getByName = useCallback(
-    (name) => {
-      if (!name) return null;
-      return byName.get(String(name)) || null;
+      // 서버가 {message, bookmark:{...}} 형태
+      const updatedObj = res?.bookmark ?? res;
+      const updated = normalizeBookmark(updatedObj);
+
+      // ✅ 여기서 id가 바뀌는 케이스(너가 겪는 케이스)를 반영
+      setItems((prev) => {
+        // kakao_id 기준으로 같은 항목 찾아서 교체
+        const kid = String(updated.kakao_id ?? "");
+        if (!kid) return prev;
+
+        const next = prev.map((x) => (String(x.kakao_id ?? "") === kid ? { ...x, ...updated } : x));
+        return next;
+      });
+
+      // (선택) 완전 싱크 원하면 아래도 OK
+      // refresh({ force: true });
+
+      return updated;
     },
-    [byName]
+    [isAuthed, token]
   );
 
   const value = useMemo(
@@ -218,10 +224,9 @@ export function BookmarksProvider({ children }) {
       refresh,
       isBookmarked,
       toggle,
-      // optional helper
-      getByName,
+      saveMemo, // ✅ 노출
     }),
-    [items, loading, error, refresh, isBookmarked, toggle, getByName]
+    [items, loading, error, refresh, isBookmarked, toggle, saveMemo]
   );
 
   return <BookmarksContext.Provider value={value}>{children}</BookmarksContext.Provider>;

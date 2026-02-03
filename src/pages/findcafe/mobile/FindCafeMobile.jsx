@@ -346,22 +346,13 @@ export default function FindCafeMobile() {
 
     loadPlacesFromBackendByBrowser(distanceKm).catch((e) => {
       console.error(e);
-      alert("collect/places 요청에 실패했습니다. 콘솔/네트워크를 확인해주세요.");
+      alert("위치 요청에 실패했습니다. 다시 시도해주세요.");
       setIsMyLocationMode(false);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMyLocationMode]);
 
-  // 거리 변경 시 재요청 (내 위치 ON일 때만)
-  useEffect(() => {
-    if (!isMyLocationMode) return;
 
-    loadPlacesFromBackendByBrowser(distanceKm).catch((e) => {
-      console.error(e);
-      alert("거리 변경 후 요청에 실패했습니다.");
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [distanceKm]);
 
   async function handleGoMyLocation() {
     if (isMyLocationMode) {

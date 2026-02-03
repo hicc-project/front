@@ -37,15 +37,15 @@ export default function HomePc() {
           </div>
 
           <div className="list">
-            <div classname="threeblocks">
+            <div className="threeblocks">
               <img src={drinkicon} alt="음료" className="threeicons" />
               <div>녹차라떼</div>
             </div>
-            <div classname="threeblocks">
+            <div className="threeblocks">
               <img src={bakeryicon} alt="제빵" className="threeicons" />
               <div>앙버터</div>
             </div>
-            <div classname="threeblocks">
+            <div className="threeblocks">
               <img src={desserticon} alt="디저트" className="threeicons" />
               <div>당근케이크</div>
             </div>
