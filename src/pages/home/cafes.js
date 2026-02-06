@@ -51,7 +51,7 @@ export const cafes = [
     location: "서울 마포구 와우산로27길 20 1층",
     time: "11:00-22:00",
     signature: "딸기 모찌 수플레 팬케이크",
-    kakao: "",
+    kakao: "378492672",
   },
   {
     id: 6,
@@ -60,7 +60,7 @@ export const cafes = [
     location: "서울 마포구 와우산로 101 1층",
     time: "10:30-21:30",
     signature: "딸기밭케이크",
-    kakao: "",
+    kakao: "1337140142",
   },
   {
     id: 7,
@@ -69,7 +69,7 @@ export const cafes = [
     location: "서울 마포구 와우산로21길 21-12 1층",
     time: "12:00-21:00",
     signature: "메이플 호두 아포가토",
-    kakao: "",
+    kakao: "1685252751",
   },
   {
     id: 8,
@@ -78,7 +78,7 @@ export const cafes = [
     location: "서울 마포구 와우산로29길 47 1,2층",
     time: "1:000-22:00",
     signature: "반가워딸기",
-    kakao: "",
+    kakao: "432440843",
   },
   {
     id: 9,
@@ -87,7 +87,7 @@ export const cafes = [
     location: "서울 마포구 와우산로29길 47 1,2층",
     time: "10:00-22:00",
     signature: "크림브륄레 큐브",
-    kakao: "",
+    kakao: "1665871730",
   },
   {
     id: 10,
@@ -96,7 +96,7 @@ export const cafes = [
     location: "서울 마포구 홍익로5길 19",
     time: "09:00-22:00",
     signature: "퀸아망 초코 바나나",
-    kakao: "",
+    kakao: "524176204",
   },
   {
     id: 11,
@@ -105,7 +105,7 @@ export const cafes = [
     location: "서울 마포구 홍익로5길 13 동신빌딩 B01",
     time: "09:00-23:00",
     signature: "바나나 티라미슈",
-    kakao: "",
+    kakao: "1372734736",
   },
   {
     id: 12,
@@ -114,7 +114,7 @@ export const cafes = [
     location: "서울 마포구 동교로 145 1층",
     time: "09:00-18:00",
     signature: "폴 브라운",
-    kakao: "",
+    kakao: "26611826",
   },
   {
     id: 13,
@@ -123,7 +123,7 @@ export const cafes = [
     location: "서울 마포구 홍익로2길 27-22 2층",
     time: "13:00-20:00",
     signature: "초코 푸딩 컵케이크",
-    kakao: "",
+    kakao: "232717751",
   },
   {
     id: 14,
@@ -132,7 +132,7 @@ export const cafes = [
     location: "서울 마포구 독막로8길 19 1층",
     time: "10:00-22:00",
     signature: "토피넛 크런치 크림라떼떼",
-    kakao: "",
+    kakao: "1968311783",
   },
   {
     id: 15,
@@ -141,16 +141,16 @@ export const cafes = [
     location: "서울 마포구 토정로 28-10 4층",
     time: "13:00-23:00",
     signature: "로얄밀크티",
-    kakao: "",
+    kakao: "760043078",
   },
   {
     id: 16,
     tag: "✦ 오늘의 추천 카페",
-    name: "코코넛트리",
+    name: "코코넛박스",
     location: "서울 마포구 와우산로11길 9-8 1층층",
     time: "09:00-22:00",
     signature: "제철과일 패스츄리",
-    kakao: "",
+    kakao: "497287177",
   },
   {
     id: 17,
@@ -159,7 +159,7 @@ export const cafes = [
     location: "서울 마포구 독막로14길 27",
     time: "12:00-21:00",
     signature: "소보루 크로플",
-    kakao: "",
+    kakao: "1263910882",
   },
   {
     id: 18,
@@ -168,7 +168,7 @@ export const cafes = [
     location: "서울 마포구 와우산로 43",
     time: "08:00-01:00",
     signature: "브라운치즈토스트",
-    kakao: "",
+    kakao: "1626505090",
   },
   {
     id: 19,
@@ -177,6 +177,6 @@ export const cafes = [
     location: "서울 마포구 와우산로23길 14",
     time: "11:00-22:00",
     signature: "아이스크림호떡크로플",
-    kakao: "",
+    kakao: "18758379",
   },
 ];
