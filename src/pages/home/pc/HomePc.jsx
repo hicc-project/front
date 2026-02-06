@@ -114,42 +114,66 @@ export default function HomePc() {
           </div>
 
           <div className="cardRow">
-            {selected.map((cafe) => (
-              <div className="cafeCard" key={cafe.id}>
-                <div className="cafeImgPlaceholder">
-                  <img
-                    src={new URL(
-                      `../img/${cafe.id}.jpeg`,
-                      import.meta.url
-                    ).toString()}
-                    alt={cafe.name}
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "cover",
-                      display: "block",
-                    }}
-                  />
-                </div>
+            {selected.map((cafe) => {
+              const kakaoUrl = cafe.kakao
+                ? `https://place.map.kakao.com/${cafe.kakao}`
+                : null;
 
-                <div className="cafeFooter">
-                  <div className="cafeInfo">
-                    <div className="cafeName">{cafe.name}</div>
+              return (
+                <div
+                  className="cafeCard"
+                  key={cafe.id}
+                  role={kakaoUrl ? "button" : undefined}
+                  tabIndex={kakaoUrl ? 0 : undefined}
+                  onClick={() => {
+                    if (!kakaoUrl) return;
+                    window.open(kakaoUrl, "_blank", "noopener,noreferrer");
+                  }}
+                  onKeyDown={(e) => {
+                    if (!kakaoUrl) return;
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      window.open(kakaoUrl, "_blank", "noopener,noreferrer");
+                    }
+                  }}
+                  style={{ cursor: kakaoUrl ? "pointer" : "default" }}
+                  title={kakaoUrl ? "카카오맵에서 열기" : undefined}
+                >
+                  <div className="cafeImgPlaceholder">
+                    <img
+                      src={new URL(
+                        `../img/${cafe.id}.jpeg`,
+                        import.meta.url
+                      ).toString()}
+                      alt={cafe.name}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                        display: "block",
+                      }}
+                    />
+                  </div>
 
-                    <div className="cafeLocation" title={cafe.location}>
-                      🗺️ {cafe.location}
-                    </div>
+                  <div className="cafeFooter">
+                    <div className="cafeInfo">
+                      <div className="cafeName">{cafe.name}</div>
 
-                    <div className="cafeMetaRow">
-                      <div className="cafeMeta">⏰ {cafe.time}</div>
-                      {cafe.signature ? (
-                        <div className="cafeMeta">⭐ {cafe.signature}</div>
-                      ) : null}
+                      <div className="cafeLocation" title={cafe.location}>
+                        🗺️ {cafe.location}
+                      </div>
+
+                      <div className="cafeMetaRow">
+                        <div className="cafeMeta">⏰ {cafe.time}</div>
+                        {cafe.signature ? (
+                          <div className="cafeMeta">⭐ {cafe.signature}</div>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="dots">

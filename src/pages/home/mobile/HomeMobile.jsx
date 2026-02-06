@@ -1,112 +1,178 @@
 // src/pages/home/mobile/HomeMobile.jsx
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import logoRec from "../../../icon/logo_rec.png";
 import settingsIcon from "../../../icon/Settings_gray.png";
 
+import bakeryicon from "../../../icon/bakeryicon.png";
+import drinkicon from "../../../icon/drinkicon.png";
+import desserticon from "../../../icon/desserticon.png";
+
+import { cafes } from "../cafes.js";
+import { bakerys, drinks, desserts } from "../menus.js";
+
+/* ---------------- util ---------------- */
+function pick3Distinct(len) {
+  if (len < 3) throw new Error("len must be >= 3");
+  const s = new Set();
+  while (s.size < 3) s.add(Math.floor(Math.random() * len));
+  return [...s];
+}
+
+function pick2Distinct(len) {
+  const a = Math.floor(Math.random() * len);
+  let b = Math.floor(Math.random() * (len - 1));
+  if (b >= a) b += 1;
+  return [a, b];
+}
+
 export default function HomeMobile() {
-  const navigate = useNavigate(); 
+  const navigate = useNavigate();
 
-  const recCards = useMemo(
-    () => [
-      {
-        tag: "✦ 오늘의 추천 카페",
-        name: "소과당 홍대점",
-        hours: "영업중 11:00-22:00",
-        km: "0.7km",
-        reviews: "리뷰 1,929",
-      },
-      {
-        tag: "✦ 친구와 함께 가기",
-        name: "메이플런지",
-        hours: "영업중 12:00-20:00",
-        km: "1.2km",
-        reviews: "리뷰 2,037",
-      },
-    ],
-    []
-  );
+  /* (디자인 틀 유지용) recCards / newList는 useMemo 형태를 유지하되,
+     실제 표시 데이터는 selected/menuPick로 채움 */
+  const recCards = useMemo(() => [{ tag: "" }, { tag: "" }], []);
 
-  const newList = useMemo(
-    () => [
-      { km: "0.3km", name: "카페이름", time: "00:00 - 00:00" },
-      { km: "0.5km", name: "카페이름", time: "00:00 - 00:00" },
-      { km: "1.0km", name: "카페이름", time: "00:00 - 00:00" },
-    ],
-    []
-  );
+  /* ---------------- data state (사용자 요청: 이 내용물 유지) ---------------- */
+  const [selected, setSelected] = useState([]);
+  const [menuPick, setMenuPick] = useState({
+    drink: null,
+    dessert: null,
+    bakery: null,
+  });
+
+  useEffect(() => {
+    // 카페 추천 2개
+    if (Array.isArray(cafes) && cafes.length >= 2) {
+      const [a, b] = pick2Distinct(cafes.length);
+      setSelected([cafes[a], cafes[b]]);
+    }
+
+    // 메뉴 3종(Drink/Dessert/Bakery): 서로 다른 인덱스 3개
+    const minLen = Math.min(
+      Array.isArray(drinks) ? drinks.length : 0,
+      Array.isArray(desserts) ? desserts.length : 0,
+      Array.isArray(bakerys) ? bakerys.length : 0
+    );
+
+    if (minLen >= 3) {
+      const [i, j, k] = pick3Distinct(minLen);
+      setMenuPick({
+        drink: drinks[i],
+        dessert: desserts[j],
+        bakery: bakerys[k],
+      });
+    } else {
+      setMenuPick({
+        drink: Array.isArray(drinks) && drinks.length ? drinks[0] : null,
+        dessert:
+          Array.isArray(desserts) && desserts.length ? desserts[0] : null,
+        bakery: Array.isArray(bakerys) && bakerys.length ? bakerys[0] : null,
+      });
+    }
+  }, []);
+
+  const getCafe = (idx) => selected[idx] || null;
 
   return (
     <div style={styles.page}>
-      {/* Top Bar */}
+      {/* Top Bar (로고/설정) */}
       <header style={styles.topbar}>
-        <div style={styles.appName}>앱이름</div>
+        <div style={styles.leftGroup}>
+          <img src={logoRec} alt="로고" style={styles.logoImg} />
 
-        <div style={styles.topIcons}>
-          {/*  설정 아이콘 → /settings 이동 */}
           <button
             type="button"
-            style={styles.iconBtn}
+            style={styles.settingBtnInline}
             aria-label="설정"
             onClick={() => navigate("/settings")}
           >
-            <img src={settingsIcon} alt="설정" style={styles.iconImg} />
+            <img src={settingsIcon} alt="설정" style={styles.iconImgInline} />
           </button>
         </div>
       </header>
-
-      {/* Recommendation carousel */}
+      {/* Recommendation carousel (카페 추천) */}
       <section style={styles.carouselSection}>
         <div style={styles.carousel}>
-          {recCards.map((c, idx) => (
-            <div key={idx} style={styles.recCard}>
-              <div style={styles.recTag}>{c.tag}</div>
+          {recCards.map((c, idx) => {
+            const cafe = getCafe(idx);
+            const imgSrc = cafe
+              ? new URL(`../img/${cafe.id}.jpeg`, import.meta.url).toString()
+              : null;
 
-              <div style={styles.recImage}>
-                <div style={styles.imagePlaceholder} />
-          
-              </div>
+            return (
+              <div key={idx} style={styles.recCard}>
+                <div style={styles.recTag}>{c.tag}</div>
 
-              <div style={styles.recFooter}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={styles.recName}>{c.name}</div>
-                  <div style={styles.recMeta}>{c.hours}</div>
+                <div style={styles.recImage}>
+                  {imgSrc ? (
+                    <img
+                      src={imgSrc}
+                      alt={cafe?.name || "cafe"}
+                      style={styles.recRealImg}
+                    />
+                  ) : (
+                    <div style={styles.imagePlaceholder} />
+                  )}
                 </div>
 
-                <div style={styles.recRight}>
-                  <div>{c.km}</div>
-                  <div>{c.reviews}</div>
+                <div style={styles.recFooter}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={styles.recName}>{cafe?.name ?? ""}</div>
+
+                    <div style={styles.recMeta}>
+                      {cafe?.location ? (
+                        <div style={styles.metaLine}>🗺️ {cafe.location}</div>
+                      ) : null}
+
+                      {cafe?.time ? (
+                        <div style={styles.metaLine}>⏰ {cafe.time}</div>
+                      ) : null}
+
+                      {cafe?.signature ? (
+                        <div style={styles.metaLine}>⭐ {cafe.signature}</div>
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
+        </div>
+
+        <div style={styles.dotsWrap} aria-hidden="true">
+          <span style={{ ...styles.dot, ...styles.dotActive }} />
+          <span style={styles.dot} />
+          <span style={styles.dot} />
+          <span style={styles.dot} />
+          <span style={styles.dot} />
         </div>
       </section>
 
-      {/* NEW section */}
-      <section style={styles.newSection}>
-        <div style={styles.newTitle}>NEW!</div>
-        <div style={styles.newSub}>근처에 새로 생긴 카페를 즐겨보세요!</div>
+      {/* (메뉴 추천) */}
+      <section style={styles.eatSection}>
+        <div style={styles.eatTitle}>How About This menu?</div>
+        <div style={styles.eatSub}>개발팀의 메뉴 추천!</div>
 
-        <div style={styles.newList}>
-          {newList.map((x, idx) => (
-            <div key={idx} style={styles.newRow}>
-              <div style={styles.kmPill}>{x.km}</div>
+        <div style={styles.eatTiles}>
+          <button type="button" style={styles.tileBtn} aria-label="coffee">
+            <img src={drinkicon} alt="coffee" style={styles.tileIcon} />
+            <div style={styles.tileLabel}>Drink</div>
+            <div style={styles.tileValue}>{menuPick.drink?.name ?? ""}</div>
+          </button>
 
-              <div style={styles.newText}>
-                <div style={styles.newName}>{x.name}</div>
-                <div style={styles.newTime}>영업시간 {x.time}</div>
-              </div>
+          <button type="button" style={styles.tileBtn} aria-label="cookie">
+            <img src={desserticon} alt="cookie" style={styles.tileIcon} />
+            <div style={styles.tileLabel}>Cookie</div>
+            <div style={styles.tileValue}>{menuPick.dessert?.name ?? ""}</div>
+          </button>
 
-              <button
-                type="button"
-                style={styles.favBtn}
-                aria-label="즐겨찾기"
-              >
-                ☆
-              </button>
-            </div>
-          ))}
+          <button type="button" style={styles.tileBtn} aria-label="bakery">
+            <img src={bakeryicon} alt="bakery" style={styles.tileIcon} />
+            <div style={styles.tileLabel}>Bakery</div>
+            <div style={styles.tileValue}>{menuPick.bakery?.name ?? ""}</div>
+          </button>
         </div>
       </section>
 
@@ -117,11 +183,9 @@ export default function HomeMobile() {
 }
 
 /* ---------------- styles ---------------- */
-
 const PINK = "#84DEEE";
 const TEXT = "#4A4A4A";
 const SUB = "#7A7A7A";
-const LINE = "#EFEFEF";
 
 const styles = {
   page: {
@@ -139,29 +203,42 @@ const styles = {
     alignItems: "center",
     justifyContent: "space-between",
   },
-  appName: {
-    fontSize: 20,
-    fontWeight: 900,
-    color: TEXT,
-  },
-  topIcons: {
+
+  leftGroup: {
     display: "flex",
-    gap: 10,
     alignItems: "center",
+    gap: 10, // 로고-설정 간격
   },
-  iconBtn: {
+
+  rightGroup: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+  },
+
+  settingBtnInline: {
     width: 32,
     height: 32,
     border: "none",
     background: "transparent",
     padding: 0,
     cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  iconImg: {
-    width: 35,
-    height: 35,
+
+  iconImgInline: {
+    width: 30,
+    height: 30,
     objectFit: "contain",
     opacity: 0.85,
+  },
+
+  logoImg: {
+    height: 45,
+    width: 60,
+    objectFit: "contain",
   },
 
   /* Carousel */
@@ -198,6 +275,12 @@ const styles = {
     height: "100%",
     background: "rgba(0,0,0,0.08)",
   },
+  recRealImg: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+  },
   starOnImage: {
     position: "absolute",
     top: 10,
@@ -228,77 +311,104 @@ const styles = {
   },
   recMeta: {
     textAlign: "left",
-    marginTop: 4,
+    marginTop: 6,
     fontSize: 12,
     fontWeight: 700,
     color: "rgba(255,255,255,0.92)",
+    display: "flex",
+    flexDirection: "column",
+    gap: 4, // 줄 간격
   },
+
+  metaLine: {
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
+
   recRight: {
     gap: 6,
     display: "flex",
-    flexDirection: "column",  
+    flexDirection: "column",
     textAlign: "right",
     fontSize: 12,
     fontWeight: 800,
     color: "rgba(255,255,255,0.92)",
   },
 
-  /* NEW */
-  newSection: {
-    marginTop: 25,
+  dotsWrap: {
+    display: "flex",
+    justifyContent: "center",
+    gap: 6,
+    padding: "8px 0 2px",
+  },
+  dot: {
+    width: 22,
+    height: 4,
+    borderRadius: 999,
+    background: "rgba(0,0,0,0.12)",
+  },
+  dotActive: {
+    background: "rgba(0,0,0,0.35)",
+  },
+
+  /* WHAT TO EAT */
+  eatSection: {
+    marginTop: 26,
     padding: "6px 14px 16px",
   },
-  newTitle: {
+  eatTitle: {
     fontSize: 22,
     fontWeight: 900,
     color: TEXT,
   },
-  newSub: {
+  eatSub: {
     marginTop: 4,
     fontSize: 13,
     fontWeight: 700,
     color: SUB,
   },
-  newList: {
+  eatTiles: {
     marginTop: 14,
-    display: "flex",
-    flexDirection: "column",
-    gap: 14,
-  },
-  newRow: {
     display: "grid",
-    gridTemplateColumns: "68px 1fr 44px",
+    gridTemplateColumns: "repeat(3, 1fr)",
     gap: 12,
-    alignItems: "center",
   },
-  newText: {
-    minWidth: 0,
+  tileBtn: {
+    height: 88,
+    borderRadius: 18,
+    border: "none",
+    cursor: "pointer",
+    background: "rgba(132, 222, 238, 0.55)",
     display: "flex",
     flexDirection: "column",
-    alignItems: "flex-start",
-    textAlign: "left",
-  },
-
-  kmPill: {
-    height: 44,
-    borderRadius: 14,
-    background: PINK,
-    color: "#fff",
-    fontWeight: 900,
-    display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    gap: 6,
+    boxShadow: "0 8px 18px rgba(0,0,0,0.07)",
   },
-  newName: { fontSize: 14, fontWeight: 900, color: TEXT },
-  newTime: { marginTop: 4, fontSize: 12, fontWeight: 700, color: SUB },
-  favBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
-    border: "none",
-    background: "transparent",
-    cursor: "pointer",
-    fontSize: 22,
-    color: PINK,
+  tileIcon: {
+    width: 34,
+    height: 34,
+    objectFit: "contain",
+    display: "block",
+    opacity: 0.95,
+  },
+  tileLabel: {
+    fontSize: 12,
+    fontWeight: 900,
+    color: "#fff",
+    letterSpacing: "-0.01em",
+    textTransform: "lowercase",
+  },
+  tileValue: {
+    fontSize: 11,
+    fontWeight: 800,
+    color: "rgba(0,0,0,0.55)",
+    width: "86%",
+    textAlign: "center",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
   },
 };
