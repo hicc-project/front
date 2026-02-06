@@ -57,17 +57,7 @@ function normalizeCafe(raw, myLoc) {
   const rating = Number.isFinite(ratingNum) ? ratingNum : 0;
   const reviews = formatReviews(raw.reviews ?? raw.review_count ?? raw.reviewCount);
 
-  const imagesArr =
-    raw.images ??
-    raw.imageUrls ??
-    raw.image_urls ??
-    (raw.image_url ? [raw.image_url] : null) ??
-    [];
 
-  const images =
-    Array.isArray(imagesArr) && imagesArr.length
-      ? imagesArr
-      : ["카페사진1", "카페사진2", "카페사진3"];
 
   const placeForRoute = {
     kakaoId: kakaoId ?? id,
@@ -76,7 +66,7 @@ function normalizeCafe(raw, myLoc) {
     lng,
   };
 
-  return { id, kakaoId: kakaoId ?? id, name, lat, lng, distanceKm, hours, reviews, rating, images, placeForRoute };
+  return { id, kakaoId: kakaoId ?? id, name, lat, lng, distanceKm, hours, reviews, rating, placeForRoute };
 }
 
 /* -------------------- page -------------------- */
@@ -124,6 +114,7 @@ export default function Open24Mobile() {
       ) : (
         <>
           <section style={styles.section}>
+            <div style={styles.listHeading}>24-HOUR CAFE LIST</div>
             <NearestCard
               cafe={nearest}
               isFav={isBookmarked(nearest.kakaoId)}
@@ -140,7 +131,7 @@ export default function Open24Mobile() {
           </section>
 
           <section style={{ ...styles.section, paddingBottom: 100 }}>
-            <div style={styles.listHeading}>24-HOUR CAFE LIST</div>
+            
             <div style={styles.listWrap}>
               {rest.map((c) => (
                 <CafeCard
@@ -170,9 +161,6 @@ export default function Open24Mobile() {
 
 function NearestCard({ cafe, isFav, onToggleFav, onRoute }) {
   const [idx, setIdx] = useState(0);
-  const images = cafe.images?.length ? cafe.images : ["카페사진1", "카페사진2", "카페사진3"];
-  const current = images[idx % images.length];
-
   return (
     <div style={styles.nearestCard}>
       <div style={styles.nearestTopRow}>
@@ -198,21 +186,13 @@ function NearestCard({ cafe, isFav, onToggleFav, onRoute }) {
         </div>
 
         <div style={styles.metaStack}>
-          <div style={styles.ratingRow}>
-            <span style={styles.ratingLabel}>별점</span>
-            <Stars value={cafe.rating || 0} />
-            <span style={styles.ratingValue}>{(cafe.rating || 0).toFixed(1)}</span>
-          </div>
+
 
           <div style={styles.metaText}>거리 {(cafe.distanceKm ?? 0).toFixed(2)} km</div>
         </div>
       </div>
 
-      <div style={styles.photoRow}>
-        <PhotoTile label="카페사진1" active={current === images[0]} onClick={() => setIdx(0)} />
-        <PhotoTile label="카페사진2" active={current === images[1]} onClick={() => setIdx(1)} />
-        <PhotoTile label="카페사진3" active={current === images[2]} onClick={() => setIdx(2)} />
-      </div>
+
     </div>
   );
 }
@@ -221,9 +201,7 @@ function CafeCard({ cafe, isFav, onToggleFav, onRoute }) {
   return (
     <div style={styles.card}>
       <div style={styles.cardRow}>
-        <div style={styles.thumbBox}>
-          <div style={styles.thumbText}>카페사진</div>
-        </div>
+
 
         <div style={styles.cardBody}>
           {/* ✅ 모바일은 absolute 영역에 "길찾기 + 즐겨찾기" 같이 */}
@@ -340,11 +318,8 @@ const styles = {
 
   metaStack: { display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start", textAlign: "left" },
   metaText: { fontSize: 12, color: SUB, fontWeight: 700 },
-
-  ratingRow: { display: "flex", alignItems: "center", gap: 8 },
-  ratingLabel: { fontSize: 12, color: SUB, fontWeight: 800 },
   stars: { color: PINK, fontSize: 16, letterSpacing: 1.2 },
-  ratingValue: { fontSize: 12, color: SUB, fontWeight: 800 },
+
 
   photoRow: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 },
   photoTile: {
@@ -366,16 +341,7 @@ const styles = {
   card: { borderRadius: 18, border: "1px solid #EAEAEA", background: "#fff", padding: 12 },
   cardRow: { display: "flex", gap: 12 },
 
-  thumbBox: {
-    width: 86,
-    height: 86,
-    borderRadius: 16,
-    background: "#D9D9D9",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
+
   thumbText: { fontWeight: 900, color: "#fff", fontSize: 12 },
 
   cardBody: { position: "relative", flex: 1, minWidth: 0, textAlign: "left" },

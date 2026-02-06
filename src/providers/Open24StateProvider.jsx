@@ -12,7 +12,7 @@ export function Open24StateProvider({ children }) {
   const [myLoc, setMyLoc] = useState(null);
   const [cafesRaw, setCafesRaw] = useState([]);
 
-  // ✅ refs: 상태 안정화용
+  //  refs: 상태 안정화용
   const cafesRef = useRef([]);
   const lastFetchedAtRef = useRef(0);
   const inflightRef = useRef(null);
@@ -28,10 +28,10 @@ export function Open24StateProvider({ children }) {
     const hasData = cafesRef.current.length > 0;
     const isFresh = hasData && now - lastFetchedAtRef.current < OPEN24_TTL_MS;
 
-    // ✅ TTL 캐시
+    //  TTL 캐시
     if (!force && isFresh) return cafesRef.current;
 
-    // ✅ 진행 중 요청 재사용(연타 방지)
+    //  진행 중 요청 재사용(연타 방지)
     if (!force && inflightRef.current) return inflightRef.current;
 
     const mySeq = ++reqSeqRef.current;

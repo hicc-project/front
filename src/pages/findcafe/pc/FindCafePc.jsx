@@ -436,6 +436,18 @@ function MapLayout() {
       return;
     }
 
+    // ✅ Layout 부트스트랩에서 이미 places/myLocation을 준비했으면 재요청 없이 바로 반영
+    if (Array.isArray(places) && places.length > 0 && myLocation?.lat && myLocation?.lng) {
+      drawCafeMarkers(places);
+      if (mapRef.current && window.kakao?.maps) {
+        mapRef.current.panTo(new window.kakao.maps.LatLng(myLocation.lat, myLocation.lng));
+        centerRef.current = { lat: myLocation.lat, lng: myLocation.lng };
+        drawMyLocationMarker(myLocation.lat, myLocation.lng);
+        drawRadiusCircle(distanceKm);
+      }
+      return;
+    }
+
     loadPlacesFromBackendByBrowser(distanceKm).catch((e) => {
       console.error(e);
 
@@ -852,20 +864,11 @@ function PlaceDetailPanel({ place, onBack, onCenterTo, onRoute }) {
             rel="noreferrer"
             style={styles.kakaoLink}
           >
-            카카오 장소페이지 열기
+            카카오 페이지 열기
           </a>
         ) : null}
       </div>
 
-      <div style={styles.detailReviewList2}>
-        {Array.from({ length: 8 }).map((_, i) => (
-          <input
-            key={i}
-            style={styles.detailReviewInput2}
-            placeholder="방문자 리뷰"
-          />
-        ))}
-      </div>
 
       <button
         type="button"
@@ -893,9 +896,12 @@ function haversineMeters(lat1, lng1, lat2, lng2) {
 }
 
 function formatDistance(m) {
-  if (m >= 1000) return `${(m / 1000).toFixed(1)} km`;
-  return `${m} m`;
+  const n = Math.round(Number(m || 0));
+
+  if (n >= 1000) return `${Math.round(n / 1000)} km`;
+  return `${n} m`;
 }
+
 
 function escapeHtml(s) {
   return String(s)
@@ -1129,6 +1135,7 @@ const styles = {
   },
 
   detailPanel: {
+ 
     height: "100%",
     overflowY: "auto",
     padding: 12,
@@ -1138,7 +1145,7 @@ const styles = {
     display: "grid",
     gridTemplateColumns: "40px 1fr auto",
     alignItems: "center",
-    gap: 10,
+  
     padding: "10px 8px",
     border: "1px solid #eee",
     borderRadius: 14,
@@ -1183,7 +1190,7 @@ const styles = {
   },
 
   detailMetaRow2: {
-    marginTop: 12,
+    marginTop: 15,
     display: "flex",
     gap: 10,
     color: "#7A7A7A",
@@ -1197,32 +1204,27 @@ const styles = {
     border: "1px solid #eee",
     background: "#fff",
   },
-
   detailInfo2: {
+
     textAlign: "left",
     marginTop: 12,
     padding: "0 6px",
     color: "#7A7A7A",
     fontWeight: 700,
     fontSize: 13,
-  },
-  detailInfoRow2: { marginTop: 6 },
 
-  detailReviewList2: {
-    marginTop: 12,
-    display: "flex",
-    flexDirection: "column",
-    gap: 10,
-    padding: "0 6px 18px",
   },
-  detailReviewInput2: {
-    height: 42,
-    borderRadius: 12,
-    border: "1px solid #E6E6E6",
-    padding: "0 12px",
-    outline: "none",
-    fontSize: 13,
+  detailInfoRow2: { marginTop: 6, lineHeight: 3},
+
+  kakaoLink: {
+    display: "inline-block",
+    marginTop: 10,
+    color: "#666",
+    textDecoration: "none",
+    fontSize: 12,
+    fontWeight: 800,
   },
+
 
   detailCenterBtn: {
     width: "100%",

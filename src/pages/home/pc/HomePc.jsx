@@ -163,61 +163,146 @@ export default function HomePc() {
       </section>
 
       {/* 페이지 하단에 CSS 삽입 */}
+
       <style>{`
-  /* 좌측 메뉴(How About This Menu!) - 전체 축소 버전 */
-  .list {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-    padding: 4px 0px 0px;
+  /* 좌측 메뉴 - 미니멀 글래스(그림자 축소, 내부 선 제거) */
+  .list{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    padding:10px 10px 0;
   }
 
-  .menuRow {
-    display: grid;
-    grid-template-columns: 220px 1fr;  /* 좌측 폭 축소 */
-    align-items: center;
-    column-gap: 0px;
-    padding: 12px 0px;                /* 행 높이 축소 */
-    border-top: 1px solid #6a6a6a;     /* 선 두께 축소 */
+  .menuRow{
+    position:relative;
+    display:grid;
+    grid-template-columns: 220px 1fr;
+    align-items:center;
+    gap:14px;
+    padding:12px 14px;
+
+    border-radius:18px;
+    background: rgba(255,255,255,0.62);
+    border: 1px solid rgba(17,17,17,0.10);
+
+    /* 그림자 조금 줄임 */
+    box-shadow:
+    0 6px 14px rgba(0,0,0,0.05),
+    0 1px 3px rgba(0,0,0,0.03);
+
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+
+    overflow:hidden;
+    transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
   }
 
-  .menuRow:first-child {
-    border-top: none;
+  /* 내부 선(상단 하이라이트 / 좌우 디바이더) 제거 */
+  .menuRow::before,
+  .menuRow::after{
+    display:none;
+    content:none;
   }
 
-  .menuLeft {
-    display: flex;
-    align-items: center;
-    gap: 14px;                        /* 간격 축소 */
-    padding-left: 8px;                /* 좌측 여백 축소 */
+  .menuRow:hover{
+    transform: translateY(-2px);
+    border-color: rgba(17,17,17,0.16);
+    box-shadow:
+      0 8px 18px rgba(0,0,0,0.055),
+    0 2px 6px rgba(0,0,0,0.035);
   }
 
-  .menuIcon {
-    width: 58px;                      /* 아이콘 축소 */
-    height: 58px;
-    object-fit: contain;
-    display: block;
-    flex-shrink: 0;
+  .menuLeft{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding-right:10px;
+    min-width:0;
   }
 
-  .menuLabel {
-    font-size: 18px;                  /* 라벨 축소 */
-    font-weight: 700;
-    color: #111;
+  /* 아이콘 58x58 고정: 주변 장식 제거 */
+  .menuIcon{
+    width:58px;
+    height:58px;
+    flex:0 0 58px;
+    display:block;
+    object-fit:contain;
+
+    border:none;
+    background:transparent;
+    box-shadow:none;
+    border-radius:0;
+    padding:0;
   }
 
-  .menuInputBox {
-    height: auto;
-    background: transparent;
-    border-radius: 0px;
-    padding: 0 12px 0 0;              /* 우측 여백 축소 */
-    display: flex;
-    align-items: left;
-    justify-content: flex-end;
-    box-sizing: border-box;
-    font-size: 16px;                  /* 메뉴명 축소 */
-    font-weight: 300;
-    color: #000000;
+  .menuLabel{
+    font-size:15px;
+    font-weight:850;
+    color:#101010;
+    letter-spacing:-0.03em;
+    line-height:1.15;
+    min-width:0;
+
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+
+  .menuInputBox{
+    display:flex;
+    margin-right:8px;
+    align-items:center;
+    justify-content:flex-end;
+    min-width:0;
+    padding-left:14px;
+  }
+
+  /* 우측 박스: 내부선(인셋) 제거 */
+  .menuInputBox > *{
+    max-width:100%;
+    width:fit-content;
+
+    padding:10px 12px;
+    border-radius:14px;
+ 
+    background: rgba(255,255,255,0.78);
+    border: 1px solid rgba(0,0,0,0.10);
+
+    /* 내부선 제거 + 그림자도 약하게 */
+    box-shadow: 0 8px 18px rgba(0,0,0,0.05);
+
+    font-size:14px;
+    font-weight:600;
+    color: rgba(0,0,0,0.72);
+    letter-spacing:-0.01em;
+    line-height:1.2;
+
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    box-sizing:border-box;
+  }
+
+  .menuInputBox.isEmpty > *{
+    color: rgba(0,0,0,0.38);
+    background: rgba(0,0,0,0.03);
+    box-shadow: none;
+  }
+
+  @media (max-width: 560px){
+    .list{ padding:10px 8px 0; }
+    .menuRow{
+      grid-template-columns: 1fr;
+      gap:10px;
+    }
+    .menuLeft{ padding-right:0; }
+    .menuInputBox{
+      justify-content:flex-start;
+      padding-left:0;
+    }
+    .menuInputBox > *{
+      width:100%;
+    }
   }
 `}</style>
     </div>

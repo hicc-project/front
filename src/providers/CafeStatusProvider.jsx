@@ -33,6 +33,9 @@ export function CafeStatusProvider({ children }) {
   const [openStatusMap, setOpenStatusMap] = useState({});
   const [version, setVersion] = useState(0);
 
+  // ✅ logs 폴링은 "부트스트랩 완료" 이후에만 켜기 (API 호출 순서 보장)
+  const [logsPollingEnabled, setLogsPollingEnabled] = useState(false);
+
   // 마지막으로 "정상 logs"를 반영한 시각
   const lastGoodLogsAtRef = useRef(0);
 
@@ -126,30 +129,29 @@ export function CafeStatusProvider({ children }) {
       });
   }, [syncLogsWithRetry]);
 
+  // ✅ 부트스트랩 이후에만 logs 폴링 시작
   useEffect(() => {
+    if (!logsPollingEnabled) return;
+
     let alive = true;
-
-    // 1) 앱 시작 즉시 logs 1회 (빠른 표시용)
-    syncLogs({ force: false }).catch(() => {});
-
-    // 2) 30초마다 logs 갱신
     const id = setInterval(() => {
       if (!alive) return;
       syncLogs({ force: false }).catch(() => {});
     }, DEFAULT_LOGS_TTL_MS);
 
-    // 3) 무거운 warmup은 첫 진입 때 조용히 1번 시작 (쿨다운으로 중복 방지)
-    const t = setTimeout(() => {
-      if (!alive) return;
-      warmupIfNeeded();
-    }, 1500);
-
     return () => {
       alive = false;
       clearInterval(id);
-      clearTimeout(t);
     };
-  }, [syncLogs, warmupIfNeeded]);
+  }, [logsPollingEnabled, syncLogs]);
+
+  // ✅ 순서 고정 warmup (Layout에서 collect/places 이후에 호출)
+  const warmupOrdered = useCallback(async () => {
+    // collect_details -> refresh_status -> (force) logs
+    await collectDetails({}).catch(() => {});
+    await refreshStatus({}).catch(() => {});
+    await syncLogsWithRetry().catch(() => {});
+  }, [syncLogsWithRetry]);
 
   const value = useMemo(
     () => ({
@@ -158,9 +160,12 @@ export function CafeStatusProvider({ children }) {
       syncLogs,
       syncLogsWithRetry,
       warmupIfNeeded,
+      warmupOrdered,
+      logsPollingEnabled,
+      setLogsPollingEnabled,
       lastGoodLogsAt: lastGoodLogsAtRef.current,
     }),
-    [openStatusMap, version, syncLogs, syncLogsWithRetry, warmupIfNeeded]
+    [openStatusMap, version, syncLogs, syncLogsWithRetry, warmupIfNeeded, warmupOrdered, logsPollingEnabled]
   );
 
   return <CafeStatusCtx.Provider value={value}>{children}</CafeStatusCtx.Provider>;

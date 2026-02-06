@@ -29,7 +29,7 @@ export const drinks = [
   },
   {
     id: 7,
-    name: "아망추",
+    name: "말차라떼",
   },
 ];
 
@@ -99,6 +99,6 @@ export const bakerys = [
   },
   {
     id: 7,
-    name: "브리오슈슈",
+    name: "브리오슈",
   },
 ];

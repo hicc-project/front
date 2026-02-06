@@ -61,17 +61,9 @@ function normalizeCafe(raw, myLoc) {
   const rating = Number.isFinite(ratingNum) ? ratingNum : 0;
   const reviews = formatReviews(raw.reviews ?? raw.review_count ?? raw.reviewCount);
 
-  const imagesArr =
-    raw.images ??
-    raw.imageUrls ??
-    raw.image_urls ??
-    (raw.image_url ? [raw.image_url] : null) ??
-    [];
 
-  const images =
-    Array.isArray(imagesArr) && imagesArr.length ? imagesArr : ["카페사진1", "카페사진2", "카페사진3"];
 
-  return { id, name, lat, lng, distanceKm, hours, reviews, rating, images };
+  return { id, name, lat, lng, distanceKm, hours, reviews, rating};
 }
 
 /* -------------------- component -------------------- */
@@ -186,16 +178,13 @@ export default function Open24Pc() {
 
 function NearestCard({ cafe, isFav, onToggleFav, onRoute }) {
   const [idx, setIdx] = useState(0);
-  const images = cafe.images?.length ? cafe.images : ["카페사진1", "카페사진2", "카페사진3"];
-  const current = images[idx % images.length];
+
 
   return (
     <div style={styles.nearestCard}>
       <div style={styles.nearestTopRow}>
         <div style={styles.nearestTitleRow}>
           <div style={styles.nearestName}>{cafe.name}</div>
-
-          {/* ✅ 길찾기 + 즐겨찾기: 옆에 배치 */}
           <div style={styles.topActions}>
             <button type="button" style={styles.routeBtn} onClick={onRoute}>
               길찾기
@@ -214,23 +203,13 @@ function NearestCard({ cafe, isFav, onToggleFav, onRoute }) {
         </div>
 
         <div style={styles.nearestMetaRow}>
-          <div style={styles.ratingRow}>
-            <span style={styles.ratingLabel}>별점</span>
-            <Stars value={cafe.rating || 0} />
-            <span style={styles.ratingValue}>{(cafe.rating || 0).toFixed(1)}</span>
-          </div>
-
           <div style={styles.metaRight}>
             <div style={styles.metaText}>거리 {(cafe.distanceKm ?? 0).toFixed(2)} km</div>
           </div>
         </div>
       </div>
 
-      <div style={styles.photoRow}>
-        <PhotoTile label="카페사진1" active={current === images[0]} onClick={() => setIdx(0)} />
-        <PhotoTile label="카페사진2" active={current === images[1]} onClick={() => setIdx(1)} />
-        <PhotoTile label="카페사진3" active={current === images[2]} onClick={() => setIdx(2)} />
-      </div>
+
     </div>
   );
 }
@@ -239,10 +218,6 @@ function CafeRow({ cafe, isFav, onToggleFav, onRoute }) {
   return (
     <div style={styles.rowCard}>
       <div style={styles.rowLeft}>
-        <div style={styles.thumbBox}>
-          <div style={styles.thumbText}>카페사진</div>
-        </div>
-
         <div style={styles.rowBody}>
           <div style={styles.rowName}>{cafe.name}</div>
           <div style={styles.rowMeta}>거리 {(cafe.distanceKm ?? 0).toFixed(2)} km</div>
@@ -287,8 +262,6 @@ function Stars({ value }) {
   const stars = Array.from({ length: 5 }, (_, i) => (i < full ? "★" : "☆")).join("");
   return <span style={styles.stars}>{stars}</span>;
 }
-
-/* -------------------- styles (기존 스타일 유지 + 버튼만 추가) -------------------- */
 
 const PINK = "#84DEEE";
 const PINK_DARK = "#8acfdbff";
@@ -387,13 +360,12 @@ const styles = {
   favBtnActive: { background: PINK, color: "#fff", border: `1px solid ${PINK_DARK}` },
 
   nearestMetaRow: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, alignItems: "start" },
-  ratingRow: { display: "flex", alignItems: "center", gap: 8 },
-  ratingLabel: { fontSize: 14, color: "#5F5F5F", fontWeight: 700 },
-  stars: { color: PINK, fontSize: 18, letterSpacing: 1.2 },
-  ratingValue: { fontSize: 14, color: "#5F5F5F", fontWeight: 700 },
 
-  metaRight: { display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" },
-  metaText: { fontSize: 13, color: "#7A7A7A", fontWeight: 600 },
+  stars: { color: PINK, fontSize: 18, letterSpacing: 1.2 },
+
+
+  metaRight: { display: "flex", flexDirection: "column"},
+  metaText: { fontSize: 13, color: "#7A7A7A", fontWeight: 600 ,textAlign: "left"},
 
   photoRow: {
     display: "grid",

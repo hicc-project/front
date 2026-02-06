@@ -212,11 +212,14 @@ export function openKakaoRouteToPlace(place) {
         place.name
       )},${place.lat},${place.lng}`;
 
-      window.location.href = url;
+      // ✅ 기존 페이지 유지 + 새 탭으로 열기
+      const win = window.open(url, "_blank", "noopener,noreferrer");
+
     },
     () => alert("위치 정보를 가져올 수 없습니다.")
   );
 }
+
 
 //  10) 24H cafes 
 export async function fetch24hCafes({ lat, lng, radius_m } = {}) {

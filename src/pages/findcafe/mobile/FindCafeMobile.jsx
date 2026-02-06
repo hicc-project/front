@@ -344,6 +344,18 @@ export default function FindCafeMobile() {
       return;
     }
 
+    // ✅ Layout 부트스트랩에서 이미 places/myLocation을 준비했으면 재요청 없이 바로 그려주기
+    if (Array.isArray(places) && places.length > 0 && myLocation?.lat && myLocation?.lng) {
+      drawCafeMarkers(places);
+      if (mapRef.current && window.kakao?.maps) {
+        mapRef.current.panTo(new window.kakao.maps.LatLng(myLocation.lat, myLocation.lng));
+        centerRef.current = { lat: myLocation.lat, lng: myLocation.lng };
+        drawMyLocationMarker(myLocation.lat, myLocation.lng);
+        drawCircle(distanceKm);
+      }
+      return;
+    }
+
     loadPlacesFromBackendByBrowser(distanceKm).catch((e) => {
       console.error(e);
       alert("위치 요청에 실패했습니다. 다시 시도해주세요.");
@@ -693,16 +705,12 @@ function MobileDetailPanel({ place, onBack, onRoute }) {
 
         {place.url ? (
           <a href={place.url} target="_blank" rel="noreferrer" style={styles.kakaoLink}>
-            카카오 장소페이지 열기
+            카카오 페이지 열기
           </a>
         ) : null}
       </div>
 
-      <div style={styles.reviewList}>
-        {Array.from({ length: 6 }).map((_, i) => (
-          <input key={i} style={styles.reviewInput} placeholder="방문자 리뷰" />
-        ))}
-      </div>
+
     </div>
   );
 }
@@ -723,9 +731,12 @@ function haversineMeters(lat1, lng1, lat2, lng2) {
 }
 
 function formatDistance(m) {
-  if (m >= 1000) return `${(m / 1000).toFixed(1)}km`;
-  return `${m}m`;
+  const n = Math.round(Number(m || 0));
+
+  if (n >= 1000) return `${Math.round(n / 1000)} km`;
+  return `${n} m`;
 }
+
 
 /* ---------------- styles ---------------- */
 
@@ -1034,7 +1045,7 @@ const styles = {
     fontSize: 13,
   },
 
-  detailInfoRow: { marginTop: 6 },
+  detailInfoRow: { marginTop: 6, lineHeight: 2 },
 
   kakaoLink: {
     display: "inline-block",
@@ -1045,20 +1056,4 @@ const styles = {
     fontWeight: 800,
   },
 
-  reviewList: {
-    marginTop: 12,
-    display: "flex",
-    flexDirection: "column",
-    gap: 10,
-    padding: "0 6px 18px",
-  },
-
-  reviewInput: {
-    height: 42,
-    borderRadius: 12,
-    border: "1px solid #E6E6E6",
-    padding: "0 12px",
-    outline: "none",
-    fontSize: 13,
-  },
 };
