@@ -9,7 +9,7 @@ import { openKakaoRouteToPlace} from "../../../utils/cafeApi";
 
 
 
-const PINK = "#84DEEE";
+const BLUE = "#84DEEE";
 const LINE = "#E9E9E9";
 const TEXT = "#4A4A4A";
 const SUB = "#7A7A7A";
@@ -158,7 +158,7 @@ export default function FavoritesPC() {
                 key={cafe.id ?? `${kid}_${idx}`}
                 cafe={cafe}
                 memoValue={draft}
-                placeholder={idx === 0 ? "내 메모" : "나의 한마디"}
+                placeholder="내 메모" 
                 saving={isSaving}
                 onMemoChange={(v) => onChangeMemo(kid, v)}
                 onSaveMemo={() => onSaveMemo(cafe)}
@@ -266,7 +266,7 @@ const styles = {
   },
 
   brandRow: { display: "flex", alignItems: "center", gap: 14 },
-  brandStar: { fontSize: 42, color: PINK, lineHeight: 1 },
+  brandStar: { fontSize: 42, color: BLUE, lineHeight: 1 },
   brandTitle: { fontSize: 26, fontWeight: 800, color: TEXT, letterSpacing: 0.2, textAlign: "left" },
   brandSub: { marginTop: 4, fontSize: 14, color: SUB, fontWeight: 600 },
 
@@ -295,7 +295,7 @@ const styles = {
     color: TEXT,
     textAlign: "left",
   },
-  dropActive: { background: PINK, color: "#fff" },
+  dropActive: { background: BLUE, color: "#fff" },
 
   list: { flex: 1, overflowY: "auto" },
 
@@ -311,7 +311,7 @@ const styles = {
   leftBlock: { display: "flex", alignItems: "center", gap: 14, minWidth: 0 },
   rowStarBtn: {
     fontSize: 22,
-    color: PINK,
+    color: BLUE,
     width: 26,
     textAlign: "center",
     border: "none",
@@ -356,7 +356,7 @@ const styles = {
     padding: "0 14px",
     borderRadius: 10,
     border: "none",
-    background: PINK,
+    background: BLUE,
     color: "#fff",
     fontWeight: 800,
     cursor: "pointer",
@@ -370,7 +370,7 @@ const styles = {
     maxWidth: 520,
     height: 52,
     borderRadius: 10,
-    border: `1px solid ${PINK}`,
+    border: `1px solid ${BLUE}`,
     background: "#fff",
     display: "flex",
     alignItems: "center",
@@ -386,7 +386,7 @@ const styles = {
     height: 0,
     borderTop: "10px solid transparent",
     borderBottom: "10px solid transparent",
-    borderRight: `12px solid ${PINK}`,
+    borderRight: `12px solid ${BLUE}`,
   },
 
   memoInput: {

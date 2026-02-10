@@ -17,7 +17,8 @@ import {
 const HIDE_AUTH_PATHS = [
   "/login",
   "/signup",
-  "/find",     // 빼고싶은 페이지 라우터 주소 
+  "/find",
+  "/open24", // 빼고싶은 페이지 라우터 주소
 ];
 
 export default function Layout() {
@@ -46,12 +47,14 @@ export default function Layout() {
     const dLng = toRad(lng2 - lng1);
     const a =
       Math.sin(dLat / 2) ** 2 +
-      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+      Math.cos(toRad(lat1)) *
+        Math.cos(toRad(lat2)) *
+        Math.sin(dLng / 2) ** 2;
     return 2 * R * Math.asin(Math.sqrt(a));
   };
 
   // ✅ 앱 진입(라우팅 루트) 순간 부트스트랩:
-  // collect -> places -> collect_details -> refresh_status -> open_status_logs
+  // collect -> places -> refresh_status(+좌표/반경) -> open_status_logs
   useEffect(() => {
     if (bootOnceRef.current || bootInflightRef.current) return;
     bootInflightRef.current = true;
@@ -59,7 +62,9 @@ export default function Layout() {
     (async () => {
       try {
         // 1) 브라우저 위치 선확보
-        const { lat, lng } = await getBrowserLocation({ timeout: 10000 }).catch(() => ({}));
+        const { lat, lng } = await getBrowserLocation({ timeout: 10000 }).catch(
+          () => ({})
+        );
         if (typeof lat !== "number" || typeof lng !== "number") return;
 
         setMyLocation({ lat, lng });
@@ -68,6 +73,7 @@ export default function Layout() {
 
         // 2) collect -> places (전역 저장)
         const radius_m = Math.round((distanceKm ?? 1.0) * 1000);
+
         await collectPlacesByLocation({ lat, lng, radius_m }).catch(() => {});
 
         const list = await fetchPlaces({ lat, lng, radius_m }).catch(() => []);
@@ -91,8 +97,8 @@ export default function Layout() {
         normalized.sort((a, b) => a.distM - b.distM);
         setPlaces(normalized);
 
-        // 3) collect_details -> refresh_status -> open_status_logs
-        await warmupOrdered().catch(() => {});
+        // ✅ 3) refresh_status를 "내 주변만" 갱신되게 좌표/반경 포함 호출
+        await warmupOrdered({ lat, lng, radius_m }).catch(() => {});
 
         // 4) 이후부터 logs 폴링 켬
         setLogsPollingEnabled(true);
@@ -101,7 +107,15 @@ export default function Layout() {
         bootInflightRef.current = false;
       }
     })();
-  }, [distanceKm, setCenter, setIsMyLocationMode, setMyLocation, setPlaces, warmupOrdered, setLogsPollingEnabled]);
+  }, [
+    distanceKm,
+    setCenter,
+    setIsMyLocationMode,
+    setMyLocation,
+    setPlaces,
+    warmupOrdered,
+    setLogsPollingEnabled,
+  ]);
 
   const hideAuth = HIDE_AUTH_PATHS.some((p) => pathname.startsWith(p));
 
@@ -147,11 +161,11 @@ const styles = {
   main: {
     flex: 1,
     minWidth: 0,
-    minHeight: 0,  
+    minHeight: 0,
     margin: 0, // ✅
     padding: 0, // ✅
     overflow: "hidden", // ✅ 페이지(Outlet)가 넘치면 여기서 잘 관리
-    display: "flex",     // ✅ Outlet 페이지가 column 레이아웃일 때 안정적
+    display: "flex", // ✅ Outlet 페이지가 column 레이아웃일 때 안정적
     flexDirection: "column",
   },
   sidebar: { width: 110, borderRight: "1px solid #eee" },

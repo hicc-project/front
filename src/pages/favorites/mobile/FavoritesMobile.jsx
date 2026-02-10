@@ -7,7 +7,7 @@ import { useAuth } from "../../../providers/AuthProvider";
 import { useBookmarks } from "../../../providers/BookmarksProvider";
 import { openKakaoRouteToPlace } from "../../../utils/cafeApi"; 
 
-const PINK = "#84DEEE";
+const BLUE = "#84DEEE";
 const LINE = "#E9E9E9";
 const TEXT = "#4A4A4A";
 const SUB = "#7A7A7A";
@@ -158,7 +158,7 @@ export default function FavoritesMobile() {
                 key={cafe.id ?? `${kid}_${idx}`}
                 cafe={cafe}
                 memoValue={draft}
-                placeholder={idx === 0 ? "내 메모" : "나의 한마디"}
+                placeholder="내 메모" 
                 saving={isSaving}
                 onMemoChange={(v) => onChangeMemo(kid, v)}
                 onSaveMemo={() => onSaveMemo(cafe)}
@@ -192,8 +192,6 @@ function MobileRow({ cafe, memoValue, placeholder, saving, onMemoChange, onSaveM
 
           <div style={styles.rowBody}>
             <div style={styles.name}>{cafe.name}</div>
-            {/* 즐겨찾기엔 영업시간/거리 없음 */}
-            <div style={styles.meta}>메모를 남겨보세요</div>
           </div>
         </div>
 
@@ -269,7 +267,7 @@ const styles = {
     borderBottom: `1px solid ${LINE}`,
   },
   headerRow: { display: "flex", alignItems: "center", gap: 12 },
-  headerStar: { fontSize: 34, color: PINK, lineHeight: 1 },
+  headerStar: { fontSize: 34, color: BLUE, lineHeight: 1 },
   title: { fontSize: 22, fontWeight: 900, color: TEXT },
   subTitle: { marginTop: 2, fontSize: 12, fontWeight: 700, color: SUB },
 
@@ -318,7 +316,7 @@ const styles = {
     color: TEXT,
     textAlign: "left",
   },
-  dropActive: { background: PINK, color: "#fff" },
+  dropActive: { background: BLUE, color: "#fff" },
 
   list: { flex: 1, overflowY: "auto" },
 
@@ -350,7 +348,7 @@ const styles = {
   left: { display: "flex", alignItems: "center", gap: 12, minWidth: 0 },
   rowStarBtn: {
     fontSize: 20,
-    color: PINK,
+    color: BLUE,
     width: 26,
     border: "none",
     background: "transparent",
@@ -384,7 +382,7 @@ const styles = {
     padding: "0 12px",
     borderRadius: 10,
     border: "none",
-    background: PINK,
+    background: BLUE,
     color: "#fff",
     fontWeight: 900,
     cursor: "pointer",
@@ -396,7 +394,7 @@ const styles = {
     width: "100%",
     height: 46,
     borderRadius: 10,
-    border: `1px solid ${PINK}`,
+    border: `1px solid ${BLUE}`,
     background: "#fff",
     display: "flex",
     alignItems: "center",
@@ -411,7 +409,7 @@ const styles = {
     height: 0,
     borderLeft: "10px solid transparent",
     borderRight: "10px solid transparent",
-    borderBottom: `10px solid ${PINK}`,
+    borderBottom: `10px solid ${BLUE}`,
   },
   bubbleInput: {
     width: "100%",

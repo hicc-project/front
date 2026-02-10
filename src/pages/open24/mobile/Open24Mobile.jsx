@@ -1,10 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo } from "react";
 import { openKakaoRouteToPlace } from "../../../utils/cafeApi";
 import { useOpen24State } from "../../../providers/Open24StateProvider";
 import { useAuth } from "../../../providers/AuthProvider";
 import { useBookmarks } from "../../../providers/BookmarksProvider";
 import moonEmptyIcon from "../../../icon/moon_empty.png";
-
 
 /* -------------------- helpers -------------------- */
 function haversineKm(lat1, lng1, lat2, lng2) {
@@ -30,11 +29,10 @@ function normalizeCafe(raw, myLoc) {
   const kakaoId =
     raw.kakaoId ?? raw.kakao_id ?? raw.place_id ?? raw.placeId ?? raw.id ?? raw.pk ?? null;
 
-  const id =
-    String(
-      kakaoId ??
-        `${raw.name ?? raw.place_name ?? "cafe"}-${raw.lat ?? raw.y}-${raw.lng ?? raw.x}`
-    );
+  const id = String(
+    kakaoId ??
+      `${raw.name ?? raw.place_name ?? "cafe"}-${raw.lat ?? raw.y}-${raw.lng ?? raw.x}`
+  );
 
   const name = raw.name ?? raw.place_name ?? raw.cafe_name ?? raw.title ?? "카페이름";
 
@@ -57,8 +55,6 @@ function normalizeCafe(raw, myLoc) {
   const rating = Number.isFinite(ratingNum) ? ratingNum : 0;
   const reviews = formatReviews(raw.reviews ?? raw.review_count ?? raw.reviewCount);
 
-
-
   const placeForRoute = {
     kakaoId: kakaoId ?? id,
     name,
@@ -66,26 +62,35 @@ function normalizeCafe(raw, myLoc) {
     lng,
   };
 
-  return { id, kakaoId: kakaoId ?? id, name, lat, lng, distanceKm, hours, reviews, rating, placeForRoute };
+  return {
+    id,
+    kakaoId: kakaoId ?? id,
+    name,
+    lat,
+    lng,
+    distanceKm,
+    hours,
+    reviews,
+    rating,
+    placeForRoute,
+  };
 }
 
 /* -------------------- page -------------------- */
 export default function Open24Mobile() {
   const { loading, errMsg, myLoc, cafesRaw, loadOpen24 } = useOpen24State();
-  const { isAuthed } = useAuth();
+  const { isAuthed } = useAuth(); // eslint-disable-line no-unused-vars
   const { isBookmarked, toggle } = useBookmarks();
 
   useEffect(() => {
     loadOpen24();
   }, [loadOpen24]);
 
-  const { nearest, rest } = useMemo(() => {
+  // ✅ nearest/rest 없애고 "정렬된 전체 리스트"로 통합
+  const sortedCafes = useMemo(() => {
     const normalized = cafesRaw.map((r) => normalizeCafe(r, myLoc));
     normalized.sort((a, b) => (a.distanceKm ?? 9999) - (b.distanceKm ?? 9999));
-    return {
-      nearest: normalized[0] ?? null,
-      rest: normalized.length > 1 ? normalized.slice(1) : [],
-    };
+    return normalized;
   }, [cafesRaw, myLoc]);
 
   return (
@@ -104,43 +109,28 @@ export default function Open24Mobile() {
             다시 시도
           </button>
         </div>
-      ) : !nearest ? (
-          <div style={styles.emptyWrap}>
-            <div style={styles.emptyInner}>
-              <img src={moonEmptyIcon} alt="" style={styles.emptyIconImg} />
-              <div style={styles.emptyText}>지금 내 근처에는 24시 카페가 없어요!</div>
-            </div>
+      ) : sortedCafes.length === 0 ? (
+        <div style={styles.emptyWrap}>
+          <div style={styles.emptyInner}>
+            <img src={moonEmptyIcon} alt="" style={styles.emptyIconImg} />
+            <div style={styles.emptyText}>지금 내 근처에는 24시 카페가 없어요!</div>
           </div>
+        </div>
       ) : (
         <>
           <section style={styles.section}>
             <div style={styles.listHeading}>24-HOUR CAFE LIST</div>
-            <NearestCard
-              cafe={nearest}
-              isFav={isBookmarked(nearest.kakaoId)}
-              onToggleFav={async () => {
-                try {
-                  await toggle(nearest.kakaoId, nearest.name);
-                } catch (e) {
-                  if (e?.code === "LOGIN_REQUIRED") alert("즐겨찾기는 로그인 후 사용할 수 있어요.");
-                  else alert(e?.message || "즐겨찾기 처리 실패");
-                }
-              }}
-              onRoute={() => openKakaoRouteToPlace(nearest.placeForRoute)}
-            />
-          </section>
 
-          <section style={{ ...styles.section, paddingBottom: 100 }}>
-            
+            {/* ✅ 가까운 순으로 전체 리스트 렌더링 */}
             <div style={styles.listWrap}>
-              {rest.map((c) => (
+              {sortedCafes.map((c) => (
                 <CafeCard
                   key={c.id}
                   cafe={c}
                   isFav={isBookmarked(c.kakaoId)}
                   onToggleFav={async () => {
                     try {
-                      await toggle(c.kakaoId,  c.name);
+                      await toggle(c.kakaoId, c.name);
                     } catch (e) {
                       if (e?.code === "LOGIN_REQUIRED") alert("즐겨찾기는 로그인 후 사용할 수 있어요.");
                       else alert(e?.message || "즐겨찾기 처리 실패");
@@ -151,6 +141,9 @@ export default function Open24Mobile() {
               ))}
             </div>
           </section>
+
+          {/* 기존처럼 바텀 여백 유지(하단 네비/탭바 고려) */}
+          <div style={{ height: 100 }} />
         </>
       )}
     </div>
@@ -159,52 +152,12 @@ export default function Open24Mobile() {
 
 /* -------------------- Components -------------------- */
 
-function NearestCard({ cafe, isFav, onToggleFav, onRoute }) {
-  const [idx, setIdx] = useState(0);
-  return (
-    <div style={styles.nearestCard}>
-      <div style={styles.nearestTopRow}>
-        <div style={styles.nearestTitleRow}>
-          <div style={styles.nearestName}>{cafe.name}</div>
-
-          {/* ✅ 길찾기 + 즐겨찾기 */}
-          <div style={styles.nearestActions}>
-            <button type="button" style={styles.routeBtnSmall} onClick={onRoute}>
-              길찾기
-            </button>
-
-            <button
-              type="button"
-              onClick={onToggleFav}
-              aria-label="즐겨찾기"
-              style={{ ...styles.favBtn, ...(isFav ? styles.favBtnActive : null) }}
-              title="즐겨찾기"
-            >
-              {isFav ? "★" : "☆"}
-            </button>
-          </div>
-        </div>
-
-        <div style={styles.metaStack}>
-
-
-          <div style={styles.metaText}>거리 {(cafe.distanceKm ?? 0).toFixed(2)} km</div>
-        </div>
-      </div>
-
-
-    </div>
-  );
-}
-
 function CafeCard({ cafe, isFav, onToggleFav, onRoute }) {
   return (
     <div style={styles.card}>
       <div style={styles.cardRow}>
-
-
         <div style={styles.cardBody}>
-          {/* ✅ 모바일은 absolute 영역에 "길찾기 + 즐겨찾기" 같이 */}
+          {/* ✅ 길찾기 + 즐겨찾기 */}
           <div style={styles.actionsAbs}>
             <button type="button" style={styles.routeBtnSmall} onClick={onRoute}>
               길찾기
@@ -232,29 +185,10 @@ function CafeCard({ cafe, isFav, onToggleFav, onRoute }) {
   );
 }
 
-function PhotoTile({ label, active, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{ ...styles.photoTile, ...(active ? styles.photoTileActive : null) }}
-      aria-label={label}
-    >
-      {label}
-    </button>
-  );
-}
+/* -------------------- Styles (기존 스타일 유지) -------------------- */
 
-function Stars({ value }) {
-  const full = Math.max(0, Math.min(5, Math.round(value)));
-  const stars = Array.from({ length: 5 }, (_, i) => (i < full ? "★" : "☆")).join("");
-  return <span style={styles.stars}>{stars}</span>;
-}
-
-/* -------------------- Styles (기존 스타일 유지 + 액션 컨테이너만 추가) -------------------- */
-
-const PINK = "#84DEEE";
-const PINK_DARK = "#8acfdbff";
+const BLUE = "#84DEEE";
+const BLUE_DARK = "#8acfdbff";
 const TEXT = "#4A4A4A";
 const SUB = "#7A7A7A";
 
@@ -269,81 +203,20 @@ const styles = {
   headerTitle: { fontSize: 30, fontWeight: 900, color: TEXT, letterSpacing: -0.3, lineHeight: 1.1 },
   headerSub: { marginTop: 8, fontSize: 13, fontWeight: 700, color: SUB },
 
-  reloadBtn: {
-    padding: "10px 14px",
-    borderRadius: 12,
-    border: `1px solid ${PINK}`,
-    background: "#fff",
-    cursor: "pointer",
-    fontWeight: 800,
-    color: TEXT,
-  },
-
   section: { padding: "14px 16px" },
-  listHeading: { fontSize: 14, fontWeight: 900, color: "#4F4F4F", letterSpacing: 0.2, marginBottom: 10 },
-  listWrap: { display: "flex", flexDirection: "column", gap: 12 },
-
-  nearestCard: {
-    marginTop: 12,
-    borderRadius: 18,
-    border: "1px solid #EAEAEA",
-    background: "#fff",
-    padding: 14,
-    display: "flex",
-    flexDirection: "column",
-    gap: 12,
-    boxShadow: "0 10px 24px rgba(0,0,0,0.05)",
-  },
-  nearestTopRow: { display: "flex", flexDirection: "column", gap: 10 },
-
-  nearestTitleRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 },
-  nearestName: { fontSize: 20, fontWeight: 900, color: "#3F3F3F" },
-
-  nearestActions: { display: "flex", gap: 8, alignItems: "center" },
-
-  favBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    border: `1px solid ${PINK}`,
-    background: "#fff",
-    cursor: "pointer",
-    fontSize: 20,
-    color: PINK,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  favBtnActive: { background: PINK, color: "#fff", border: `1px solid ${PINK_DARK}` },
-
-  metaStack: { display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start", textAlign: "left" },
-  metaText: { fontSize: 12, color: SUB, fontWeight: 700 },
-  stars: { color: PINK, fontSize: 16, letterSpacing: 1.2 },
-
-
-  photoRow: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 },
-  photoTile: {
-    height: 110,
-    borderRadius: 14,
-    border: "none",
-    background: "#D9D9D9",
-    color: "#FFFFFF",
+  listHeading: {
     fontSize: 14,
     fontWeight: 900,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    cursor: "pointer",
+    color: "#4F4F4F",
+    letterSpacing: 0.2,
+    marginBottom: 10,
   },
-  photoTileActive: { background: "#CFCFCF", outline: `3px solid ${PINK}` },
+
+  listWrap: { display: "flex", flexDirection: "column", gap: 12 },
 
   // 카드 리스트
   card: { borderRadius: 18, border: "1px solid #EAEAEA", background: "#fff", padding: 12 },
   cardRow: { display: "flex", gap: 12 },
-
-
-  thumbText: { fontWeight: 900, color: "#fff", fontSize: 12 },
-
   cardBody: { position: "relative", flex: 1, minWidth: 0, textAlign: "left" },
 
   // ✅ (길찾기+별) absolute 컨테이너
@@ -358,7 +231,7 @@ const styles = {
 
   routeBtnSmall: {
     border: "none",
-    background: PINK,
+    background: BLUE,
     color: "#fff",
     fontWeight: 900,
     fontSize: 12,
@@ -372,18 +245,24 @@ const styles = {
     width: 34,
     height: 34,
     borderRadius: 12,
-    border: `1px solid ${PINK}`,
+    border: `1px solid ${BLUE}`,
     background: "#fff",
     cursor: "pointer",
     fontSize: 18,
-    color: PINK,
+    color: BLUE,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
   },
-  rowFavActive: { background: PINK, color: "#fff", border: `1px solid ${PINK_DARK}` },
+  rowFavActive: { background: BLUE, color: "#fff", border: `1px solid ${BLUE_DARK}` },
 
-  cardTitleRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, paddingRight: 98 },
+  cardTitleRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    paddingRight: 98, // 액션 버튼 영역 확보
+  },
   cardName: {
     fontSize: 16,
     fontWeight: 900,
@@ -407,19 +286,20 @@ const styles = {
     marginTop: 10,
     padding: "10px 14px",
     borderRadius: 12,
-    border: `1px solid ${PINK}`,
+    border: `1px solid ${BLUE}`,
     background: "#fff",
     cursor: "pointer",
     fontWeight: 900,
     color: TEXT,
   },
+
   emptyWrap: {
-  flex: 1,
-  minHeight: 340,           // 모바일 중앙정렬 영역
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "28px 16px",
+    flex: 1,
+    minHeight: 340,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "28px 16px",
   },
 
   emptyInner: {
@@ -442,5 +322,4 @@ const styles = {
     color: "#555",
     lineHeight: 1.35,
   },
-
 };

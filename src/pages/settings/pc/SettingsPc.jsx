@@ -16,22 +16,11 @@ export default function SettingsPc() {
     () => [
       {
         title: "Policy 서비스 정책",
-        items: [
-          "이용약관",
-          "개인정보 처리방침",
-          "위치기반 서비스 약관",
-          "책임 제한 고지",
-          "저작권 정책",
-        ],
+        items: ["이용약관", "개인정보 처리방침", "위치기반 서비스 약관", "책임 제한 고지", "저작권 정책"],
       },
       {
         title: "Support 고객 지원",
-        items: [
-          "고객센터",
-          "1:1 문의하기",
-          "서비스 오류 신고",
-          "개선 의견 보내기",
-        ],
+        items: ["고객센터", "1:1 문의하기", "서비스 오류 신고", "개선 의견 보내기"],
       },
       {
         title: "About 서비스 정보",
@@ -54,13 +43,7 @@ export default function SettingsPc() {
   );
 
   const supportItems = useMemo(
-    () =>
-      new Set([
-        "고객센터",
-        "1:1 문의하기",
-        "서비스 오류 신고",
-        "개선 의견 보내기",
-      ]),
+    () => new Set(["고객센터", "1:1 문의하기", "서비스 오류 신고", "개선 의견 보내기"]),
     []
   );
 
@@ -239,35 +222,51 @@ export default function SettingsPc() {
           color:#111;
         }
 
-        /* ✅ 문의 모달 */
+        /* ===============================
+           ✅ 문의 모달 (고객센터)
+           =============================== */
+
         .supportModal{
           position:fixed;
           inset:0;
           z-index:9999;
         }
+
         .supportModalOverlay{
           position:absolute;
           inset:0;
           background: rgba(0,0,0,0.35);
         }
+
+        /* 모달 패널 */
         .supportModalPanel{
           position:relative;
           width:520px;
           max-width: calc(100vw - 32px);
           margin:90px auto 0;
           background:#fff;
-          border-radius:18px;
+          border-radius:20px;
           padding:18px 18px 16px;
           box-shadow: 0 18px 50px rgba(0,0,0,0.18);
           overflow:hidden;
         }
+
+        /* 상단 그라데이션 (더 자연스럽게) */
         .supportModalAccent{
           position:absolute;
           inset:0 0 auto 0;
-          height:92px;
-          background: linear-gradient(180deg, #84deee 0%, #c5f0f8 85%, rgba(255,255,255,0) 100%);
+          height:110px;
+          background: linear-gradient(
+            180deg,
+            rgba(132, 222, 238, 0.75) 0%,
+            rgba(132, 222, 238, 0.45) 55%,
+            rgba(132, 222, 238, 0.15) 78%,
+            rgba(255,255,255,0) 100%
+          );
           pointer-events:none;
         }
+
+        /* 헤더 */
         .supportModalHeader{
           position:relative;
           display:flex;
@@ -276,28 +275,55 @@ export default function SettingsPc() {
           gap:12px;
           padding-top:6px;
         }
+
         .supportModalTitle{
           font-size:18px;
           font-weight:900;
           color:#1f2937;
-          text-align: left;
+          text-align:left;
         }
+
         .supportModalSubtitle{
           margin-top:6px;
           font-size:13px;
           font-weight:600;
           color: rgba(31,41,55,0.72);
         }
+
+        /*  닫기 버튼 */
         .supportModalClose{
-          width:36px;
-          height:36px;
-          border-radius:12px;
-          border:1px solid rgba(17,17,17,0.12);
-          background: rgba(255,255,255,0.86);
+          position:absolute;
+          top:-2px;
+          right:-2px;
+          width:33px;
+          height:33px;
+          background:transparent;
+          border:none;
           cursor:pointer;
-          font-size:18px;
-          line-height:34px;
+          padding:0;
         }
+
+        /* X 모양 */
+        .supportModalClose::before,
+        .supportModalClose::after{
+          content:"";
+          position:absolute;
+          top:50%;
+          left:50%;
+          width:26px;
+          height:2px;
+          background:#374151;
+          transform-origin:center;
+        }
+
+        .supportModalClose::before{
+          transform: translate(-50%, -50%) rotate(45deg);
+        }
+        .supportModalClose::after{
+          transform: translate(-50%, -50%) rotate(-45deg);
+        }
+
+        /* 바디 */
         .supportModalBody{
           position:relative;
           margin-top:14px;
@@ -306,30 +332,35 @@ export default function SettingsPc() {
           border-radius:14px;
           padding:14px;
         }
+
+        /* 이메일 박스 (세로폭 줄임) */
         .supportModalEmailRow{
           display:flex;
           align-items:center;
           justify-content:space-between;
           gap:10px;
-          padding:12px;
+          padding:8px 12px;
           border-radius:12px;
-          background: rgba(132, 222, 238, 0.18);
-          border: 1px solid rgba(132, 222, 238, 0.35);
+          background: rgba(132, 222, 238, 0.16);
+          border: 1px solid rgba(132, 222, 238, 0.3);
         }
+
         .supportModalEmail{
           font-weight:900;
           color:#0f172a;
           word-break: break-all;
         }
+
+        /* 복사 버튼 */
         .supportModalBtn{
           border:none;
           cursor:pointer;
           border-radius:12px;
-          padding:10px 12px;
+          padding:8px 12px;
           font-weight:900;
           background:rgba(132, 222, 238, 0.18);
           color:#0b2a33;
-          transition: transform 120ms ease, background 120ms ease, box-shadow 120ms ease;
+          transition: transform 120ms ease, background 120ms ease;
         }
 
         .supportModalBtn:active{
@@ -337,24 +368,22 @@ export default function SettingsPc() {
           transform: scale(0.97);
         }
 
+        /* 안내 문구 */
         .supportModalHint{
           margin-top:10px;
           font-size:12px;
           color: rgba(31,41,55,0.7);
           line-height:1.6;
         }
+
         .supportModalFooter{
           display:flex;
           justify-content:flex-end;
           gap:8px;
           margin-top:12px;
         }
-        .supportModalSecondary{
-          background:#fff;
-          border:1px solid rgba(17,17,17,0.14);
-          color:#111;
-        }
-                /* ✅ 이미지 모달(서비스 소개/기획의도/팀소개 등) */
+
+        /* ✅ 이미지 모달(서비스 소개/기획의도/팀소개 등) */
         .introModal{
           position:fixed;
           inset:0;
@@ -424,12 +453,8 @@ export default function SettingsPc() {
           </div>
 
           <div className="bannerCenterText">
-            <div className="bannerLineEn">
-              You can find a cafe that's still open.
-            </div>
-            <div className="bannerLineKo">
-              이 시간에도 열려 있는 카페를 찾을 수 있어요.
-            </div>
+            <div className="bannerLineEn">You can find a cafe that's still open.</div>
+            <div className="bannerLineKo">이 시간에도 열려 있는 카페를 찾을 수 있어요.</div>
           </div>
         </section>
       </main>
@@ -441,12 +466,7 @@ export default function SettingsPc() {
               <div className="footerTitle">{col.title}</div>
               <div className="footerList">
                 {col.items.map((it) => (
-                  <button
-                    key={it}
-                    type="button"
-                    className="footerItem"
-                    onClick={() => onNavigate(it)}
-                  >
+                  <button key={it} type="button" className="footerItem" onClick={() => onNavigate(it)}>
                     {it}
                   </button>
                 ))}
@@ -458,35 +478,24 @@ export default function SettingsPc() {
 
       {/* ✅ 큰 문의 모달 */}
       {supportModalOpen && (
-        <div
-          className="supportModal"
-          role="dialog"
-          aria-modal="true"
-          aria-label="문의 안내"
-        >
-          <div
-            className="supportModalOverlay"
-            onClick={() => setSupportModalOpen(false)}
-          />
+        <div className="supportModal" role="dialog" aria-modal="true" aria-label="문의 안내">
+          <div className="supportModalOverlay" onClick={() => setSupportModalOpen(false)} />
           <div className="supportModalPanel">
             <div className="supportModalAccent" />
 
             <div className="supportModalHeader">
               <div>
                 <div className="supportModalTitle">{supportTopic}</div>
-                <div className="supportModalSubtitle">
-                  아래 이메일로 문의해 주세요.
-                </div>
+                <div className="supportModalSubtitle">아래 이메일로 문의해 주세요.</div>
               </div>
 
+              {/* ✅ 텍스트 X 제거: CSS로 X 그림 */}
               <button
                 type="button"
                 className="supportModalClose"
                 onClick={() => setSupportModalOpen(false)}
                 aria-label="닫기"
-              >
-                ×
-              </button>
+              />
             </div>
 
             <div className="supportModalBody">
@@ -502,8 +511,7 @@ export default function SettingsPc() {
               </div>
 
               <div className="supportModalHint">
-                제목에 문의 유형({supportTopic})을 포함해 주시면 처리 속도가
-                빨라집니다.
+                제목에 문의 유형({supportTopic})을 포함해 주시면 처리 속도가 빨라집니다.
               </div>
 
               <div className="supportModalFooter"></div>
@@ -511,17 +519,11 @@ export default function SettingsPc() {
           </div>
         </div>
       )}
+
+      {/* ✅ 이미지 모달 */}
       {infoModalOpen && infoData && (
-        <div
-          className="introModal"
-          role="dialog"
-          aria-modal="true"
-          aria-label={infoData.title}
-        >
-          <div
-            className="introModalOverlay"
-            onClick={() => setInfoModalOpen(false)}
-          />
+        <div className="introModal" role="dialog" aria-modal="true" aria-label={infoData.title}>
+          <div className="introModalOverlay" onClick={() => setInfoModalOpen(false)} />
           <div className="introModalPanel">
             <button
               type="button"
@@ -533,11 +535,7 @@ export default function SettingsPc() {
             </button>
 
             <div className="introModalBody">
-              <img
-                className="introImage"
-                src={infoData.img}
-                alt={infoData.title}
-              />
+              <img className="introImage" src={infoData.img} alt={infoData.title} />
             </div>
           </div>
         </div>

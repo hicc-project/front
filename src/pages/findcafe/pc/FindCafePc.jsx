@@ -19,6 +19,8 @@ import { useCafeFinderState } from "../../../providers/CafeFinderStateProvider";
 import { useAuth } from "../../../providers/AuthProvider";
 import { useBookmarks } from "../../../providers/BookmarksProvider";
 
+
+const BLUE = "#84DEEE";
 const OPEN_LOGS_TTL_MS = 30_000;
 const WARMUP_COOLDOWN_MS = 240_000;
 
@@ -27,11 +29,7 @@ let _lastWarmupAt = 0;
 
 async function getOpenLogsCached({ force = false } = {}) {
   const now = Date.now();
-  if (
-    !force &&
-    _openLogsCache.data &&
-    now - _openLogsCache.ts < OPEN_LOGS_TTL_MS
-  ) {
+  if (!force && _openLogsCache.data && now - _openLogsCache.ts < OPEN_LOGS_TTL_MS) {
     return _openLogsCache.data;
   }
   const logs = await fetchOpenStatusLogs();
@@ -79,11 +77,7 @@ function MapLayout() {
     setMyLocation,
   } = useCafeFinderState();
 
-  const {
-    openStatusMap,
-    version: openStatusVersion,
-    warmupIfNeeded,
-  } = useCafeStatus();
+  const { openStatusMap, version: openStatusVersion, warmupIfNeeded } = useCafeStatus();
 
   // ✅ 페이지 처음 들어오면 바로 "내 위치" 모드로 시작
   const autoMyLocInitRef = useRef(false);
@@ -141,8 +135,7 @@ function MapLayout() {
   const [mapReadyVersion, setMapReadyVersion] = useState(0);
 
   const selectedLabel =
-    distanceOptions.find((o) => o.km === distanceKm)?.label ??
-    `${distanceKm}km`;
+    distanceOptions.find((o) => o.km === distanceKm)?.label ?? `${distanceKm}km`;
 
   function clearMyLocationMarker() {
     if (myMarkerRef.current) {
@@ -163,8 +156,6 @@ function MapLayout() {
     markersRef.current = [];
   }
 
-  // open_status_logs 갱신은 CafeStatusProvider에서 전역으로 처리
-
   function drawMyLocationMarker(lat, lng) {
     const kakao = window.kakao;
     const map = mapRef.current;
@@ -176,11 +167,7 @@ function MapLayout() {
 
     const imageSize = new kakao.maps.Size(36, 36);
     const imageOption = { offset: new kakao.maps.Point(18, 36) };
-    const markerImage = new kakao.maps.MarkerImage(
-      myLocationIcon,
-      imageSize,
-      imageOption
-    );
+    const markerImage = new kakao.maps.MarkerImage(myLocationIcon, imageSize, imageOption);
 
     myMarkerRef.current = new kakao.maps.Marker({
       position,
@@ -205,16 +192,13 @@ function MapLayout() {
     clearCircle();
 
     circleRef.current = new kakao.maps.Circle({
-      center: new kakao.maps.LatLng(
-        centerRef.current.lat,
-        centerRef.current.lng
-      ),
+      center: new kakao.maps.LatLng(centerRef.current.lat, centerRef.current.lng),
       radius: radiusM,
       strokeWeight: 2,
-      strokeColor: PINK,
+      strokeColor: BLUE,
       strokeOpacity: 0.9,
       strokeStyle: "solid",
-      fillColor: PINK,
+      fillColor: BLUE,
       fillOpacity: 0.12,
     });
 
@@ -231,11 +215,7 @@ function MapLayout() {
     list.forEach((p) => {
       const imageSize = new kakao.maps.Size(18, 22);
       const imageOption = { offset: new kakao.maps.Point(11, 22) };
-      const markerImage = new kakao.maps.MarkerImage(
-        cafeMarkerIcon,
-        imageSize,
-        imageOption
-      );
+      const markerImage = new kakao.maps.MarkerImage(cafeMarkerIcon, imageSize, imageOption);
 
       const marker = new kakao.maps.Marker({
         position: new kakao.maps.LatLng(p.lat, p.lng),
@@ -251,9 +231,7 @@ function MapLayout() {
         )}</div>`,
       });
 
-      kakao.maps.event.addListener(marker, "mouseover", () =>
-        iw.open(map, marker)
-      );
+      kakao.maps.event.addListener(marker, "mouseover", () => iw.open(map, marker));
       kakao.maps.event.addListener(marker, "mouseout", () => iw.close());
 
       markersRef.current.push(marker);
@@ -268,6 +246,9 @@ function MapLayout() {
     ignoreNextIdleRef.current = true;
     map.panTo(new kakao.maps.LatLng(place.lat, place.lng));
   }
+
+  // ✅ 현재 distanceKm으로 로딩된 places인지 기록
+  const lastLoadedKmRef = useRef(null);
 
   async function loadPlacesFromBackendByBrowser(km) {
     const radius_m = Math.round(km * 1000);
@@ -284,9 +265,7 @@ function MapLayout() {
 
       // 🔑 2. 숫자인 경우만 kakaoId로 인정
       const kakaoId =
-        rawKakaoId != null && /^\d+$/.test(String(rawKakaoId))
-          ? String(rawKakaoId)
-          : "";
+        rawKakaoId != null && /^\d+$/.test(String(rawKakaoId)) ? String(rawKakaoId) : "";
 
       return {
         // id는 프론트용 고유키니까 fallback 허용
@@ -307,8 +286,14 @@ function MapLayout() {
     // 원본은 거리순 유지 (안정적)
     normalized.sort((a, b) => a.distM - b.distM);
 
-    setPlaces(normalized);
-    drawCafeMarkers(normalized);
+    // ✅ 프론트에서 반경 필터 → 원과 100% 일치
+    const radiusM = Math.round(km * 1000);
+    const inRange = normalized.filter((p) => p.distM <= radiusM);
+
+    lastLoadedKmRef.current = km;
+
+    setPlaces(inRange);
+    drawCafeMarkers(inRange);
 
     // 지도/마커/원 업데이트
     if (mapRef.current && window.kakao?.maps) {
@@ -345,10 +330,7 @@ function MapLayout() {
       const kakao = window.kakao;
 
       const map = new kakao.maps.Map(mapContainerRef.current, {
-        center: new kakao.maps.LatLng(
-          centerRef.current.lat,
-          centerRef.current.lng
-        ),
+        center: new kakao.maps.LatLng(centerRef.current.lat, centerRef.current.lng),
         level: 3,
       });
 
@@ -382,6 +364,7 @@ function MapLayout() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ✅ 페이지 들어오자마자: 내 위치 자동 ON (이미 값이 있으면 재요청 안 함)
@@ -409,6 +392,7 @@ function MapLayout() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ✅ 맵이 늦게 뜨는 경우 보정
@@ -426,7 +410,7 @@ function MapLayout() {
     drawRadiusCircle(distanceKm);
   }, [mapReadyVersion, isMyLocationMode, distanceKm]);
 
-  // ✅ 내 위치 모드 켜질 때만 장소 로드
+  // ✅ 내 위치 모드 켜질 때만 장소 로드 (거리 변경도 포함)
   useEffect(() => {
     if (!isMyLocationMode) {
       // OFF: 지도 표시만 끄고, 데이터(places)는 유지
@@ -436,8 +420,13 @@ function MapLayout() {
       return;
     }
 
-    // ✅ Layout 부트스트랩에서 이미 places/myLocation을 준비했으면 재요청 없이 바로 반영
-    if (Array.isArray(places) && places.length > 0 && myLocation?.lat && myLocation?.lng) {
+    // ✅ Layout 부트스트랩에서 이미 places/myLocation을 준비했으면 "처음 1회만" 재요청 없이 반영
+    const hasBootstrap =
+      Array.isArray(places) && places.length > 0 && myLocation?.lat && myLocation?.lng;
+
+    if (hasBootstrap && lastLoadedKmRef.current == null) {
+      lastLoadedKmRef.current = distanceKm;
+
       drawCafeMarkers(places);
       if (mapRef.current && window.kakao?.maps) {
         mapRef.current.panTo(new window.kakao.maps.LatLng(myLocation.lat, myLocation.lng));
@@ -448,14 +437,13 @@ function MapLayout() {
       return;
     }
 
+    // ✅ distanceKm 바뀌면 무조건 다시 로드
     loadPlacesFromBackendByBrowser(distanceKm).catch((e) => {
       console.error(e);
-
       setIsMyLocationMode(false);
     });
-  }, [isMyLocationMode]);
-
-
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMyLocationMode, distanceKm]);
 
   async function handleGoMyLocation() {
     // 토글 OFF
@@ -479,9 +467,7 @@ function MapLayout() {
       setCenter(my);
       setIsMyLocationMode(true);
     } catch {
-      alert(
-        "위치 정보를 가져올 수 없습니다. 브라우저 위치 권한을 확인해주세요."
-      );
+      alert("위치 정보를 가져올 수 없습니다. 브라우저 위치 권한을 확인해주세요.");
     }
   }
 
@@ -492,18 +478,14 @@ function MapLayout() {
         return;
       }
       navigator.geolocation.getCurrentPosition(
-        (pos) =>
-          resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
         reject,
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     });
   }
 
-  // ✅ 남은시간 정렬 점수:
-  // - minutes_to_close 숫자면 그대로(큰 값 우선)
-  // - 영업중인데 시간정보 없음: 0점(정보 있는 애들 아래, 종료/정보없음 위)
-  // - 영업종료/정보없음: 아주 낮은 점수로 맨 아래
+  // ✅ 남은시간 정렬 점수
   function closeScore(place) {
     const s = openStatusMap[String(place.kakaoId)];
     if (typeof s?.minutes_to_close === "number") return s.minutes_to_close;
@@ -519,8 +501,8 @@ function MapLayout() {
       const sa = closeScore(a);
       const sb = closeScore(b);
 
-      if (sa === sb) return a.distM - b.distM; // 안정화
-      return sb - sa; // 남은시간 큰 순
+      if (sa === sb) return a.distM - b.distM;
+      return sb - sa;
     });
 
     return arr;
@@ -580,6 +562,8 @@ function MapLayout() {
                   onClick={() => {
                     setDistanceKm(o.km);
                     setIsOpen(false);
+                    // ✅ 원은 즉시 업데이트 (데이터는 effect에서 재로딩)
+                    drawRadiusCircle(o.km);
                   }}
                 >
                   {o.label}
@@ -628,8 +612,7 @@ function RightPanel({ places, openStatusMap, onOpenDetail, onRoute }) {
         places.map((p) => {
           const starred = isBookmarked(p.kakaoId);
           const s = openStatusMap?.[String(p.kakaoId)];
-          const mtc =
-            typeof s?.minutes_to_close === "number" ? s.minutes_to_close : null;
+          const mtc = typeof s?.minutes_to_close === "number" ? s.minutes_to_close : null;
 
           let remainLine = "영업 정보 없음";
           if (s?.is_open_now === true && mtc != null) {
@@ -654,11 +637,7 @@ function RightPanel({ places, openStatusMap, onOpenDetail, onRoute }) {
                 </div>
 
                 <div style={styles.cardTopRight}>
-                  <button
-                    type="button"
-                    style={styles.routeBtn}
-                    onClick={() => onRoute(p)}
-                  >
+                  <button type="button" style={styles.routeBtn} onClick={() => onRoute(p)}>
                     길찾기
                   </button>
 
@@ -682,11 +661,7 @@ function RightPanel({ places, openStatusMap, onOpenDetail, onRoute }) {
                   </button>
                 </div>
 
-                <button
-                  type="button"
-                  style={styles.detailBtn}
-                  onClick={() => onOpenDetail(p)}
-                >
+                <button type="button" style={styles.detailBtn} onClick={() => onOpenDetail(p)}>
                   상세정보
                 </button>
               </div>
@@ -711,7 +686,7 @@ function PlaceDetailPanel({ place, onBack, onCenterTo, onRoute }) {
   useEffect(() => {
     if (!place?.kakaoId) return;
     const s = openStatusMap[String(place.kakaoId)];
-    if (s) setStatus(s); // ✅ 있을 때만 갱신 (없으면 기존 status 유지)
+    if (s) setStatus(s);
   }, [place?.kakaoId, openStatusMap, version]);
 
   useEffect(() => {
@@ -724,10 +699,7 @@ function PlaceDetailPanel({ place, onBack, onCenterTo, onRoute }) {
       setError("");
 
       try {
-        // 일단 빠르게 단건 조회(있으면 즉시)
-        const cached = await fetchOpenStatusByKakaoId(place.kakaoId).catch(
-          () => null
-        );
+        const cached = await fetchOpenStatusByKakaoId(place.kakaoId).catch(() => null);
         if (cancelled) return;
 
         if (cached) {
@@ -735,10 +707,9 @@ function PlaceDetailPanel({ place, onBack, onCenterTo, onRoute }) {
           return;
         }
 
-        warmupIfNeeded?.(); // 쿨다운 걸린 전역 워밍업(내부에서 collect_details/refresh_status)
+        warmupIfNeeded?.();
       } catch (e) {
-        if (!cancelled)
-          setError(e?.message || "영업 정보를 불러오지 못했습니다.");
+        if (!cancelled) setError(e?.message || "영업 정보를 불러오지 못했습니다.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -754,9 +725,7 @@ function PlaceDetailPanel({ place, onBack, onCenterTo, onRoute }) {
   const openTime = status?.today_open_time ?? null;
   const closeTime = status?.today_close_time ?? null;
   const minutesToClose =
-    typeof status?.minutes_to_close === "number"
-      ? status.minutes_to_close
-      : null;
+    typeof status?.minutes_to_close === "number" ? status.minutes_to_close : null;
 
   const remainText =
     isOpenNow === true && minutesToClose != null
@@ -766,12 +735,7 @@ function PlaceDetailPanel({ place, onBack, onCenterTo, onRoute }) {
   return (
     <div style={styles.detailPanel}>
       <div style={styles.detailTopBar}>
-        <button
-          type="button"
-          onClick={onBack}
-          style={styles.backBtn}
-          aria-label="뒤로가기"
-        >
+        <button type="button" onClick={onBack} style={styles.backBtn} aria-label="뒤로가기">
           ←
         </button>
 
@@ -803,22 +767,14 @@ function PlaceDetailPanel({ place, onBack, onCenterTo, onRoute }) {
       </div>
 
       <div style={styles.detailMetaRow2}>
+        <div style={styles.detailMetaItem2}>거리 {formatDistance(place.distM)}</div>
         <div style={styles.detailMetaItem2}>
-          거리 {formatDistance(place.distM)}
-        </div>
-        <div style={styles.detailMetaItem2}>
-          {loading
-            ? "영업 정보 불러오는 중..."
-            : error
-            ? "영업 정보 오류"
-            : "영업 정보"}
+          {loading ? "영업 정보 불러오는 중..." : error ? "영업 정보 오류" : "영업 정보"}
         </div>
       </div>
 
       <div style={styles.detailInfo2}>
-        <div style={styles.detailInfoRow2}>
-          주소: {place.address || "주소 정보 없음"}
-        </div>
+        <div style={styles.detailInfoRow2}>주소: {place.address || "주소 정보 없음"}</div>
 
         <div style={styles.detailInfoRow2}>
           현재 상태:{" "}
@@ -848,27 +804,15 @@ function PlaceDetailPanel({ place, onBack, onCenterTo, onRoute }) {
 
         <div style={styles.detailInfoRow2}>
           종료까지{" "}
-          {loading
-            ? "불러오는 중..."
-            : error
-            ? "-"
-            : remainText
-            ? remainText
-            : "-"}
+          {loading ? "불러오는 중..." : error ? "-" : remainText ? remainText : "-"}
         </div>
 
         {place.url ? (
-          <a
-            href={place.url}
-            target="_blank"
-            rel="noreferrer"
-            style={styles.kakaoLink}
-          >
+          <a href={place.url} target="_blank" rel="noreferrer" style={styles.kakaoLink}>
             카카오 페이지 열기
           </a>
         ) : null}
       </div>
-
 
       <button
         type="button"
@@ -897,11 +841,9 @@ function haversineMeters(lat1, lng1, lat2, lng2) {
 
 function formatDistance(m) {
   const n = Math.round(Number(m || 0));
-
   if (n >= 1000) return `${Math.round(n / 1000)} km`;
   return `${n} m`;
 }
-
 
 function escapeHtml(s) {
   return String(s)
@@ -912,8 +854,9 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
+
 /* styles */
-const PINK = "#84DEEE";
+
 
 const styles = {
   page: {
@@ -988,7 +931,7 @@ const styles = {
     width: 180,
     height: 44,
     borderRadius: 12,
-    border: `1px solid ${PINK}`,
+    border: `1px solid ${BLUE}`,
     background: "#ffffff",
     display: "grid",
     gridTemplateColumns: "auto 1fr auto",
@@ -1002,7 +945,7 @@ const styles = {
   },
   dropBtnLeft: { fontSize: 13 },
   dropBtnValue: { justifySelf: "end", fontWeight: 700, color: "#666" },
-  dropBtnArrow: { color: PINK, fontSize: 12 },
+  dropBtnArrow: { color: BLUE, fontSize: 12 },
 
   menu: {
     marginTop: 8,
@@ -1025,7 +968,7 @@ const styles = {
     fontWeight: 700,
   },
   menuItemActive: {
-    background: PINK,
+    background: BLUE,
     color: "#fff",
   },
 
@@ -1099,7 +1042,7 @@ const styles = {
 
   routeBtn: {
     border: "none",
-    background: PINK,
+    background: BLUE,
     color: "#fff",
     fontWeight: 800,
     fontSize: 12,
@@ -1112,7 +1055,7 @@ const styles = {
   starBtn: {
     border: "none",
     background: "transparent",
-    color: PINK,
+    color: BLUE,
     cursor: "pointer",
     fontSize: 20,
     lineHeight: 1,
@@ -1183,7 +1126,7 @@ const styles = {
   detailStar: {
     border: "none",
     background: "transparent",
-    color: PINK,
+    color: BLUE,
     cursor: "pointer",
     fontSize: 22,
     lineHeight: 1,
@@ -1219,7 +1162,7 @@ const styles = {
   kakaoLink: {
     display: "inline-block",
     marginTop: 10,
-    color: "#666",
+    color: BLUE,
     textDecoration: "none",
     fontSize: 12,
     fontWeight: 800,

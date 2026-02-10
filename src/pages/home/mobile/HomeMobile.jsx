@@ -183,7 +183,7 @@ export default function HomeMobile() {
 }
 
 /* ---------------- styles ---------------- */
-const PINK = "#84DEEE";
+const BLUE = "#84DEEE";
 const TEXT = "#4A4A4A";
 const SUB = "#7A7A7A";
 
@@ -256,7 +256,7 @@ const styles = {
     maxWidth: 300,
     borderRadius: 22,
     overflow: "hidden",
-    background: PINK,
+    background: BLUE,
     boxShadow: "0 10px 26px rgba(0,0,0,0.12)",
   },
   recTag: {

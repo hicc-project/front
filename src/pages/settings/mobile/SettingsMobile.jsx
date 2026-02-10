@@ -268,18 +268,27 @@ export default function SettingsMobile() {
           width:min(520px, calc(100vw - 32px));
           margin:90px auto 0;
           background:#fff;
-          border-radius:18px;
+          border-radius:20px;
           padding:18px 18px 16px;
           box-shadow: 0 18px 50px rgba(0,0,0,0.18);
           overflow:hidden;
         }
+
+        /* ✅ PC랑 동일하게: 더 자연스러운 그라데이션 */
         .supportModalAccent{
           position:absolute;
           inset:0 0 auto 0;
-          height:92px;
-          background: linear-gradient(180deg, #84deee 0%, #c5f0f8 85%, rgba(255,255,255,0) 100%);
+          height:110px;
+          background: linear-gradient(
+            180deg,
+            rgba(132, 222, 238, 0.75) 0%,
+            rgba(132, 222, 238, 0.45) 55%,
+            rgba(132, 222, 238, 0.15) 78%,
+            rgba(255,255,255,0) 100%
+          );
           pointer-events:none;
         }
+
         .supportModalHeader{
           position:relative;
           display:flex;
@@ -300,17 +309,36 @@ export default function SettingsMobile() {
           font-weight:700;
           color: rgba(31,41,55,0.72);
         }
+
         .supportModalClose{
-          width:36px;
-          height:36px;
-          border-radius:12px;
-          border:1px solid rgba(17,17,17,0.12);
-          background: rgba(255,255,255,0.86);
+          position:absolute;
+          top:-2px;
+          right:-2px;
+          width:33px;
+          height:33px;
+          background:transparent;
+          border:none;
           cursor:pointer;
-          font-size:18px;
-          line-height:34px;
-          font-weight:900;
+          padding:0;
         }
+        .supportModalClose::before,
+        .supportModalClose::after{
+          content:"";
+          position:absolute;
+          top:50%;
+          left:50%;
+          width:26px;
+          height:2px;
+          background:#374151;
+          transform-origin:center;
+        }
+        .supportModalClose::before{
+          transform: translate(-50%, -50%) rotate(45deg);
+        }
+        .supportModalClose::after{
+          transform: translate(-50%, -50%) rotate(-45deg);
+        }
+
         .supportModalBody{
           position:relative;
           margin-top:14px;
@@ -319,15 +347,17 @@ export default function SettingsMobile() {
           border-radius:14px;
           padding:14px;
         }
+
+        /* ✅ PC랑 동일하게: 이메일 박스 세로폭 줄이기 */
         .supportModalEmailRow{
           display:flex;
           align-items:center;
           justify-content:space-between;
           gap:10px;
-          padding:12px;
+          padding:8px 12px; /* 세로 슬림 */
           border-radius:12px;
-          background: rgba(132, 222, 238, 0.18);
-          border: 1px solid rgba(132, 222, 238, 0.35);
+          background: rgba(132, 222, 238, 0.16);
+          border: 1px solid rgba(132, 222, 238, 0.3);
         }
         .supportModalEmail{
           font-weight:900;
@@ -338,7 +368,7 @@ export default function SettingsMobile() {
           border:none;
           cursor:pointer;
           border-radius:12px;
-          padding:10px 12px;
+          padding:8px 12px;
           font-weight:900;
           background:rgba(132, 222, 238, 0.18);
           color:#0b2a33;
@@ -358,11 +388,11 @@ export default function SettingsMobile() {
         /* ===== Intro/Image Modal ===== */
         .introModal{
           position:fixed;
-  inset:0;
-  z-index:10000;
-  display:flex;
-  align-items:center;        /* 세로 중앙 */
-  justify-content:center;    /* 가로 중앙 */
+          inset:0;
+          z-index:10000;
+          display:flex;
+          align-items:center;
+          justify-content:center;
         }
         .introModalOverlay{
           position:absolute;
@@ -432,12 +462,8 @@ export default function SettingsMobile() {
           </div>
 
           <div className="mBannerCenterText">
-            <div className="mBannerLineEn">
-              You can find a cafe that's still open.
-            </div>
-            <div className="mBannerLineKo">
-              이 시간에도 열려 있는 카페를 찾을 수 있어요.
-            </div>
+            <div className="mBannerLineEn">You can find a cafe that's still open.</div>
+            <div className="mBannerLineKo">이 시간에도 열려 있는 카페를 찾을 수 있어요.</div>
           </div>
         </section>
       </main>
@@ -469,35 +495,24 @@ export default function SettingsMobile() {
 
       {/* 문의 모달 */}
       {supportModalOpen && (
-        <div
-          className="supportModal"
-          role="dialog"
-          aria-modal="true"
-          aria-label="문의 안내"
-        >
-          <div
-            className="supportModalOverlay"
-            onClick={() => setSupportModalOpen(false)}
-          />
+        <div className="supportModal" role="dialog" aria-modal="true" aria-label="문의 안내">
+          <div className="supportModalOverlay" onClick={() => setSupportModalOpen(false)} />
           <div className="supportModalPanel">
             <div className="supportModalAccent" />
 
             <div className="supportModalHeader">
               <div>
                 <div className="supportModalTitle">{supportTopic}</div>
-                <div className="supportModalSubtitle">
-                  아래 이메일로 문의해 주세요.
-                </div>
+                <div className="supportModalSubtitle">아래 이메일로 문의해 주세요.</div>
               </div>
 
+              {/* ✅ PC랑 동일하게: 텍스트 × 제거 */}
               <button
                 type="button"
                 className="supportModalClose"
                 onClick={() => setSupportModalOpen(false)}
                 aria-label="닫기"
-              >
-                ×
-              </button>
+              />
             </div>
 
             <div className="supportModalBody">
@@ -513,8 +528,7 @@ export default function SettingsMobile() {
               </div>
 
               <div className="supportModalHint">
-                제목에 문의 유형({supportTopic})을 포함해 주시면 처리 속도가
-                빨라집니다.
+                제목에 문의 유형({supportTopic})을 포함해 주시면 처리 속도가 빨라집니다.
               </div>
             </div>
           </div>
@@ -523,16 +537,8 @@ export default function SettingsMobile() {
 
       {/* 이미지 모달 */}
       {infoModalOpen && infoData && (
-        <div
-          className="introModal"
-          role="dialog"
-          aria-modal="true"
-          aria-label={infoData.title}
-        >
-          <div
-            className="introModalOverlay"
-            onClick={() => setInfoModalOpen(false)}
-          />
+        <div className="introModal" role="dialog" aria-modal="true" aria-label={infoData.title}>
+          <div className="introModalOverlay" onClick={() => setInfoModalOpen(false)} />
           <div className="introModalPanel">
             <button
               type="button"
@@ -544,11 +550,7 @@ export default function SettingsMobile() {
             </button>
 
             <div className="introModalBody">
-              <img
-                className="introImage"
-                src={infoData.img}
-                alt={infoData.title}
-              />
+              <img className="introImage" src={infoData.img} alt={infoData.title} />
             </div>
           </div>
         </div>

@@ -37,7 +37,11 @@ export function getBrowserLocation(options = {}) {
       return;
     }
     navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      (pos) =>
+        resolve({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        }),
       (err) => reject(err),
       { enableHighAccuracy, timeout, maximumAge }
     );
@@ -116,7 +120,7 @@ export async function fetchPlaces({ lat, lng, radius_m } = {}) {
 }
 
 /* -----------------------------
-  5) collect_details
+  5) collect_details (유지)
 -------------------------------- */
 export async function collectDetails(body = {}) {
   return request("/collect_details/", {
@@ -135,8 +139,16 @@ export async function refreshStatus(body = {}) {
   });
 }
 
+// ✅ 브라우저 위치 기반 refresh_status
+export async function refreshStatusByBrowser({ km, geoOptions } = {}) {
+  const { lat, lng } = await getBrowserLocation(geoOptions);
+  const radius_m = Math.round((km ?? 1.0) * 1000);
+  const result = await refreshStatus({ lat, lng, radius_m });
+  return { lat, lng, radius_m, result };
+}
+
 /* -----------------------------
-  7) open status logs (30초 TTL 캐시)
+  7) open status logs (30초 TTL)
 -------------------------------- */
 export async function fetchOpenStatusLogs({ ttlMs = 30000 } = {}) {
   const key = "open_status_logs";
@@ -155,47 +167,72 @@ export async function fetchOpenStatusByKakaoId(kakaoId, opts = {}) {
 }
 
 /* -----------------------------
-  8) 상세용: logs 먼저 반환 + (쿨다운 걸고) 백그라운드 최신화
-  - 상세 들어갈 때마다 details/refresh를 매번 때리지 않게!
+  8) 상세용: logs 먼저 + 가끔 refresh_status
+  👉 collect_details 사용 안 함
 -------------------------------- */
 let lastWarmupAt = 0;
 
-// 이 함수는 "빠르게 표시용"으로 logs를 먼저 주고,
-// 필요하면 최신화(collect_details/refresh_status)를 가끔만 트리거함.
 export async function getCafeLiveStatus({
   kakaoId,
   logsTtlMs = 30000,
-  warmupCooldownMs = 240000, // 4분에 1번만 최신화 트리거
+  warmupCooldownMs = 240000,
+
+  // refresh_status에 전달할 좌표/반경
+  lat,
+  lng,
+  radius_m,
+
+  // 좌표 없으면 브라우저 위치로 보완
+  useBrowserLocationForWarmup = true,
+  kmForWarmup = 1.0,
+  geoOptions,
 } = {}) {
   if (!kakaoId) return null;
 
-  // 1) (가장 빠른) logs에서 먼저 찾아서 바로 리턴
+  // 1) 빠른 표시: logs
   const first = await fetchOpenStatusByKakaoId(kakaoId, { ttlMs: logsTtlMs });
 
-  // 2) 최신화 트리거는 "가끔만"
   const now = Date.now();
-  const canWarmup = now - lastWarmupAt >= warmupCooldownMs;
-
-  if (!canWarmup) {
-    return first; // 캐시/쿨다운이면 여기서 끝
-  }
-
+  if (now - lastWarmupAt < warmupCooldownMs) return first;
   lastWarmupAt = now;
 
-  // 3) 백그라운드 최신화 (실패해도 UI는 유지)
-  //   - 여기서 await로 묶으면 느려지니까, "동작만 시키고" 끝내는 방식이 더 빠름
-  //   - 다만, 완료 후 최신 로그를 다시 읽어오고 싶으면 await 체인으로 가져오면 됨.
+  let warmLat = lat;
+  let warmLng = lng;
+  let warmRadius = radius_m;
+
+  if (
+    useBrowserLocationForWarmup &&
+    (typeof warmLat !== "number" || typeof warmLng !== "number")
+  ) {
+    try {
+      const loc = await getBrowserLocation(geoOptions);
+      warmLat = loc.lat;
+      warmLng = loc.lng;
+      warmRadius = Math.round((kmForWarmup ?? 1.0) * 1000);
+    } catch {
+      // 위치 못 얻으면 좌표 없이 refresh
+    }
+  }
+
+  // 2) 백그라운드 최신화 (내 주변만)
   Promise.resolve()
-    .then(() => collectDetails({}).catch(() => {}))
-    .then(() => refreshStatus({}).catch(() => {}))
-    .then(() => fetchOpenStatusLogs({ ttlMs: 0 }).catch(() => {})) // TTL 0으로 강제 갱신 시도
+    .then(() =>
+      refreshStatus(
+        typeof warmLat === "number" &&
+          typeof warmLng === "number" &&
+          typeof warmRadius === "number"
+          ? { lat: warmLat, lng: warmLng, radius_m: warmRadius }
+          : {}
+      ).catch(() => {})
+    )
+    .then(() => fetchOpenStatusLogs({ ttlMs: 0 }).catch(() => {}))
     .catch(() => {});
 
   return first;
 }
 
 /* -----------------------------
-  9) 길찾기: 내 위치 -> 카페
+  9) 길찾기
 -------------------------------- */
 export function openKakaoRouteToPlace(place) {
   if (!place?.name || typeof place.lat !== "number" || typeof place.lng !== "number") {
@@ -212,16 +249,15 @@ export function openKakaoRouteToPlace(place) {
         place.name
       )},${place.lat},${place.lng}`;
 
-      // ✅ 기존 페이지 유지 + 새 탭으로 열기
-      const win = window.open(url, "_blank", "noopener,noreferrer");
-
+      window.open(url, "_blank", "noopener,noreferrer");
     },
     () => alert("위치 정보를 가져올 수 없습니다.")
   );
 }
 
-
-//  10) 24H cafes 
+/* -----------------------------
+  10) 24H cafes
+-------------------------------- */
 export async function fetch24hCafes({ lat, lng, radius_m } = {}) {
   const qs = new URLSearchParams();
   if (typeof lat === "number") qs.set("lat", String(lat));
@@ -234,7 +270,6 @@ export async function fetch24hCafes({ lat, lng, radius_m } = {}) {
   const data = await request(path, { method: "GET" });
 
   if (Array.isArray(data)) return data;
-
 
   const candidate =
     data?.results ??
