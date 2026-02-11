@@ -16,11 +16,22 @@ export default function SettingsPc() {
     () => [
       {
         title: "Policy 서비스 정책",
-        items: ["이용약관", "개인정보 처리방침", "위치기반 서비스 약관", "책임 제한 고지", "저작권 정책"],
+        items: [
+          "이용약관",
+          "개인정보 처리방침",
+          "위치기반 서비스 약관",
+          "책임 제한 고지",
+          "저작권 정책",
+        ],
       },
       {
         title: "Support 고객 지원",
-        items: ["고객센터", "1:1 문의하기", "서비스 오류 신고", "개선 의견 보내기"],
+        items: [
+          "고객센터",
+          "1:1 문의하기",
+          "서비스 오류 신고",
+          "개선 의견 보내기",
+        ],
       },
       {
         title: "About 서비스 정보",
@@ -43,7 +54,13 @@ export default function SettingsPc() {
   );
 
   const supportItems = useMemo(
-    () => new Set(["고객센터", "1:1 문의하기", "서비스 오류 신고", "개선 의견 보내기"]),
+    () =>
+      new Set([
+        "고객센터",
+        "1:1 문의하기",
+        "서비스 오류 신고",
+        "개선 의견 보내기",
+      ]),
     []
   );
 
@@ -453,8 +470,12 @@ export default function SettingsPc() {
           </div>
 
           <div className="bannerCenterText">
-            <div className="bannerLineEn">You can find a cafe that's still open.</div>
-            <div className="bannerLineKo">이 시간에도 열려 있는 카페를 찾을 수 있어요.</div>
+            <div className="bannerLineEn">
+              You can find a cafe that's still open.
+            </div>
+            <div className="bannerLineKo">
+              이 시간에도 열려 있는 카페를 찾을 수 있어요.
+            </div>
           </div>
         </section>
       </main>
@@ -466,7 +487,12 @@ export default function SettingsPc() {
               <div className="footerTitle">{col.title}</div>
               <div className="footerList">
                 {col.items.map((it) => (
-                  <button key={it} type="button" className="footerItem" onClick={() => onNavigate(it)}>
+                  <button
+                    key={it}
+                    type="button"
+                    className="footerItem"
+                    onClick={() => onNavigate(it)}
+                  >
                     {it}
                   </button>
                 ))}
@@ -478,15 +504,25 @@ export default function SettingsPc() {
 
       {/* ✅ 큰 문의 모달 */}
       {supportModalOpen && (
-        <div className="supportModal" role="dialog" aria-modal="true" aria-label="문의 안내">
-          <div className="supportModalOverlay" onClick={() => setSupportModalOpen(false)} />
+        <div
+          className="supportModal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="문의 안내"
+        >
+          <div
+            className="supportModalOverlay"
+            onClick={() => setSupportModalOpen(false)}
+          />
           <div className="supportModalPanel">
             <div className="supportModalAccent" />
 
             <div className="supportModalHeader">
               <div>
                 <div className="supportModalTitle">{supportTopic}</div>
-                <div className="supportModalSubtitle">아래 이메일로 문의해 주세요.</div>
+                <div className="supportModalSubtitle">
+                  아래 이메일로 문의해 주세요.
+                </div>
               </div>
 
               {/* ✅ 텍스트 X 제거: CSS로 X 그림 */}
@@ -511,7 +547,8 @@ export default function SettingsPc() {
               </div>
 
               <div className="supportModalHint">
-                제목에 문의 유형({supportTopic})을 포함해 주시면 처리 속도가 빨라집니다.
+                제목에 문의 유형({supportTopic})을 포함해 주시면 처리 속도가
+                빨라집니다.
               </div>
 
               <div className="supportModalFooter"></div>
@@ -522,8 +559,16 @@ export default function SettingsPc() {
 
       {/* ✅ 이미지 모달 */}
       {infoModalOpen && infoData && (
-        <div className="introModal" role="dialog" aria-modal="true" aria-label={infoData.title}>
-          <div className="introModalOverlay" onClick={() => setInfoModalOpen(false)} />
+        <div
+          className="introModal"
+          role="dialog"
+          aria-modal="true"
+          aria-label={infoData.title}
+        >
+          <div
+            className="introModalOverlay"
+            onClick={() => setInfoModalOpen(false)}
+          />
           <div className="introModalPanel">
             <button
               type="button"
@@ -535,7 +580,11 @@ export default function SettingsPc() {
             </button>
 
             <div className="introModalBody">
-              <img className="introImage" src={infoData.img} alt={infoData.title} />
+              <img
+                className="introImage"
+                src={infoData.img}
+                alt={infoData.title}
+              />
             </div>
           </div>
         </div>
