@@ -4,8 +4,12 @@ import locationIcon from "../../../icon/Location.png";
 import shareIcon from "../../../icon/Share.png";
 import { useAuth } from "../../../providers/AuthProvider";
 import { useBookmarks } from "../../../providers/BookmarksProvider";
+import { openKakaoRouteToPlace} from "../../../utils/cafeApi";
 
-const PINK = "#84DEEE";
+
+
+
+const BLUE = "#84DEEE";
 const LINE = "#E9E9E9";
 const TEXT = "#4A4A4A";
 const SUB = "#7A7A7A";
@@ -47,9 +51,10 @@ export default function FavoritesPC() {
     const arr = bookmarks.map((b) => ({
       id: b.id,
       kakaoId: String(b.kakao_id ?? ""),
-      name: b.cafe_name ?? "",
-      hours: "영업시간 정보 없음",
+      name: b.cafe_name ?? b.name ?? "",
       memo: b.memo ?? "",
+      lat: typeof b.lat === "number" ? b.lat : Number(b.lat),
+      lng: typeof b.lng === "number" ? b.lng : Number(b.lng),
     }));
 
     if (sortKey === "이름순") {
@@ -127,30 +132,6 @@ export default function FavoritesPC() {
         </div>
       </header>
 
-      <div style={styles.sortBar} ref={sortRef}>
-        <button type="button" style={styles.sortBtn} onClick={() => setOpen((v) => !v)}>
-          <span style={styles.sortArrow}>V</span>
-          <span>{sortKey}</span>
-        </button>
-
-        {open && (
-          <div style={styles.dropdown}>
-            {["이름순", "거리순"].map((k) => (
-              <button
-                key={k}
-                type="button"
-                style={{ ...styles.dropItem, ...(k === sortKey ? styles.dropActive : null) }}
-                onClick={() => {
-                  setSortKey(k);
-                  setOpen(false);
-                }}
-              >
-                {k}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
 
       <div style={styles.list}>
         {!isAuthed ? (
@@ -177,7 +158,7 @@ export default function FavoritesPC() {
                 key={cafe.id ?? `${kid}_${idx}`}
                 cafe={cafe}
                 memoValue={draft}
-                placeholder={idx === 0 ? "내 메모" : "나의 한마디"}
+                placeholder="내 메모" 
                 saving={isSaving}
                 onMemoChange={(v) => onChangeMemo(kid, v)}
                 onSaveMemo={() => onSaveMemo(cafe)}
@@ -207,17 +188,34 @@ function FavoriteRow({ cafe, memoValue, placeholder, saving, onMemoChange, onSav
         </button>
         <div style={styles.info}>
           <div style={styles.name}>{cafe.name}</div>
-          <div style={styles.meta}>영업시간 {cafe.hours}</div>
         </div>
       </div>
 
       <div style={styles.midBlock}>
         <div style={styles.midIconsRow}>
-          <button type="button" style={styles.imgIconBtn} title="위치">
+          <button
+            type="button"
+            style={styles.imgIconBtn}
+            title="길찾기"
+            onClick={() => openKakaoRouteToPlace({ name: cafe.name, lat: cafe.lat, lng: cafe.lng })}
+          >
             <img src={locationIcon} alt="location" style={styles.imgIcon} />
           </button>
-          <button type="button" style={styles.imgIconBtn} title="공유">
-            <img src={shareIcon} alt="share" style={styles.imgIcon} />
+
+          <button
+            type="button"
+            style={styles.imgIconBtn}
+            title="카카오맵에서 보기"
+            onClick={() => {
+              const kid = String(cafe?.kakaoId || "").trim();
+              if (!kid) {
+                alert("카카오 장소 ID가 없습니다.");
+                return;
+              }
+              window.open(`https://place.map.kakao.com/${kid}`, "_blank", "noopener,noreferrer");
+            }}
+          >
+            <img src={shareIcon} alt="location" style={styles.imgIcon} />
           </button>
         </div>
 
@@ -268,30 +266,10 @@ const styles = {
   },
 
   brandRow: { display: "flex", alignItems: "center", gap: 14 },
-  brandStar: { fontSize: 42, color: PINK, lineHeight: 1 },
+  brandStar: { fontSize: 42, color: BLUE, lineHeight: 1 },
   brandTitle: { fontSize: 26, fontWeight: 800, color: TEXT, letterSpacing: 0.2, textAlign: "left" },
   brandSub: { marginTop: 4, fontSize: 14, color: SUB, fontWeight: 600 },
 
-  sortBar: {
-    position: "relative",
-    height: 46,
-    padding: "0 22px",
-    display: "flex",
-    alignItems: "center",
-    borderBottom: `1px solid ${LINE}`,
-  },
-  sortBtn: {
-    border: "none",
-    background: "transparent",
-    cursor: "pointer",
-    color: TEXT,
-    fontWeight: 700,
-    fontSize: 14,
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 8,
-  },
-  sortArrow: { marginTop: 4, color: SUB, fontSize: 16, transform: "translateY(-1px) scaleX(1.4)" },
 
   dropdown: {
     position: "absolute",
@@ -317,7 +295,7 @@ const styles = {
     color: TEXT,
     textAlign: "left",
   },
-  dropActive: { background: PINK, color: "#fff" },
+  dropActive: { background: BLUE, color: "#fff" },
 
   list: { flex: 1, overflowY: "auto" },
 
@@ -333,7 +311,7 @@ const styles = {
   leftBlock: { display: "flex", alignItems: "center", gap: 14, minWidth: 0 },
   rowStarBtn: {
     fontSize: 22,
-    color: PINK,
+    color: BLUE,
     width: 26,
     textAlign: "center",
     border: "none",
@@ -378,7 +356,7 @@ const styles = {
     padding: "0 14px",
     borderRadius: 10,
     border: "none",
-    background: PINK,
+    background: BLUE,
     color: "#fff",
     fontWeight: 800,
     cursor: "pointer",
@@ -392,7 +370,7 @@ const styles = {
     maxWidth: 520,
     height: 52,
     borderRadius: 10,
-    border: `1px solid ${PINK}`,
+    border: `1px solid ${BLUE}`,
     background: "#fff",
     display: "flex",
     alignItems: "center",
@@ -408,7 +386,7 @@ const styles = {
     height: 0,
     borderTop: "10px solid transparent",
     borderBottom: "10px solid transparent",
-    borderRight: `12px solid ${PINK}`,
+    borderRight: `12px solid ${BLUE}`,
   },
 
   memoInput: {

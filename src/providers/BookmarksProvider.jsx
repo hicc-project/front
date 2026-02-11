@@ -178,7 +178,7 @@ export function BookmarksProvider({ children }) {
     [isAuthed, byKakaoId, token, refresh]
   );
 
-  // ✅ 추가: 메모 저장 (PATCH) 후 items를 서버 응답으로 갱신
+  // 추가: 메모 저장 (PATCH) 후 items를 서버 응답으로 갱신
   const saveMemo = useCallback(
     async ({ bookmarkId, memo }) => {
       if (!isAuthed) {
@@ -198,7 +198,7 @@ export function BookmarksProvider({ children }) {
       const updatedObj = res?.bookmark ?? res;
       const updated = normalizeBookmark(updatedObj);
 
-      // ✅ 여기서 id가 바뀌는 케이스(너가 겪는 케이스)를 반영
+      //  여기서 id가 바뀌는 케이스(너가 겪는 케이스)를 반영
       setItems((prev) => {
         // kakao_id 기준으로 같은 항목 찾아서 교체
         const kid = String(updated.kakao_id ?? "");
@@ -224,7 +224,7 @@ export function BookmarksProvider({ children }) {
       refresh,
       isBookmarked,
       toggle,
-      saveMemo, // ✅ 노출
+      saveMemo, 
     }),
     [items, loading, error, refresh, isBookmarked, toggle, saveMemo]
   );

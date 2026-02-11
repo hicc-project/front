@@ -9,7 +9,12 @@ import React, {
   useState,
 } from "react";
 
-import { collectDetails, refreshStatus, fetchOpenStatusLogs } from "../utils/cafeApi";
+import {
+  collectDetails,            // ✅ 다시 살림
+  refreshStatus,
+  fetchOpenStatusLogs,
+  getBrowserLocation,        // ✅ 좌표 없을 때 보완용
+} from "../utils/cafeApi";
 
 /**
  * 앱 전역 open_status_logs 공유 + (가끔만) warmup(collect_details/refresh_status)
@@ -18,6 +23,10 @@ import { collectDetails, refreshStatus, fetchOpenStatusLogs } from "../utils/caf
  *  2) open_status_logs가 부분 데이터로 와도 merge로 누락 방지
  *  3) warmup(collect_details -> refresh_status) 후 open_status_logs를 2~3번 재시도해서
  *     "최초 유효 logs" 확보 확률을 높임 (초기 '정보없음' 개선)
+ *
+ * ✅ 변경점(네 요구사항)
+ *  - collect_details는 그대로 실행
+ *  - refresh_status에만 (lat,lng,radius_m)를 넣어서 "내 주변만" 갱신되게 지원
  */
 
 const CafeStatusCtx = createContext(null);
@@ -27,20 +36,23 @@ const DEFAULT_WARMUP_COOLDOWN_MS = 240_000; // warmup 쿨다운(4분)
 const RETRY_AFTER_WARMUP_ATTEMPTS = 3; // warmup 후 강제 logs 재시도 횟수
 const RETRY_AFTER_WARMUP_DELAY_MS = 1200; // warmup 후 재시도 간격(ms)
 
+const DEFAULT_WARMUP_KM = 1.0;
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export function CafeStatusProvider({ children }) {
   const [openStatusMap, setOpenStatusMap] = useState({});
   const [version, setVersion] = useState(0);
 
-  // 마지막으로 "정상 logs"를 반영한 시각
+  // ✅ logs 폴링은 "부트스트랩 완료" 이후에만 켜기
+  const [logsPollingEnabled, setLogsPollingEnabled] = useState(false);
+
   const lastGoodLogsAtRef = useRef(0);
 
   // warmup 중복 방지
   const lastWarmupAtRef = useRef(0);
   const warmupInflightRef = useRef(false);
 
-  // (선택) 디버그 로그 토글
   const DEBUG = false;
 
   const syncLogs = useCallback(async ({ force = false } = {}) => {
@@ -48,19 +60,16 @@ export function CafeStatusProvider({ children }) {
       ttlMs: force ? 0 : DEFAULT_LOGS_TTL_MS,
     }).catch(() => null);
 
-    // 1) 실패/비정상 -> 기존 유지
     if (!Array.isArray(logs)) {
       if (DEBUG) console.log("[CafeStatus] logs not array -> keep prev", logs);
       return false;
     }
 
-    // 2) 빈 배열 -> 기존 유지 (중요)
     if (logs.length === 0) {
       if (DEBUG) console.log("[CafeStatus] logs empty -> keep prev");
       return false;
     }
 
-    // 3) ID 추출 방어적으로
     const next = {};
     for (const x of logs) {
       const id = String(
@@ -76,14 +85,13 @@ export function CafeStatusProvider({ children }) {
       next[id] = x;
     }
 
-    // ID가 하나도 못 뽑혔으면(필드명/형식 문제)도 기존 유지
     const keys = Object.keys(next);
     if (keys.length === 0) {
-      if (DEBUG) console.log("[CafeStatus] parsed next empty -> keep prev", logs?.[0]);
+      if (DEBUG)
+        console.log("[CafeStatus] parsed next empty -> keep prev", logs?.[0]);
       return false;
     }
 
-    // 4) 부분 데이터/누락 방지: merge
     setOpenStatusMap((prev) => ({ ...prev, ...next }));
     setVersion((v) => v + 1);
     lastGoodLogsAtRef.current = Date.now();
@@ -92,13 +100,14 @@ export function CafeStatusProvider({ children }) {
     return true;
   }, []);
 
-  // ✅ warmup 직후 open_status_logs가 빈 배열로 튀는 경우가 있어서 재시도
   const syncLogsWithRetry = useCallback(
-    async ({ attempts = RETRY_AFTER_WARMUP_ATTEMPTS, delayMs = RETRY_AFTER_WARMUP_DELAY_MS } = {}) => {
+    async ({
+      attempts = RETRY_AFTER_WARMUP_ATTEMPTS,
+      delayMs = RETRY_AFTER_WARMUP_DELAY_MS,
+    } = {}) => {
       for (let i = 0; i < attempts; i++) {
-        // force로 캐시 무시
         const ok = await syncLogs({ force: true }).catch(() => false);
-        if (ok) return true; // 한번이라도 유효 데이터 확보하면 끝
+        if (ok) return true;
         await sleep(delayMs);
       }
       return false;
@@ -106,50 +115,79 @@ export function CafeStatusProvider({ children }) {
     [syncLogs]
   );
 
-  const warmupIfNeeded = useCallback(() => {
-    const now = Date.now();
-    if (warmupInflightRef.current) return;
-    if (now - lastWarmupAtRef.current < DEFAULT_WARMUP_COOLDOWN_MS) return;
+  // ✅ refresh_status body 만들기 (lat/lng/radius_m 없으면 브라우저 위치로 보완)
+  const resolveRefreshBody = useCallback(
+    async ({ lat, lng, radius_m, km = DEFAULT_WARMUP_KM, geoOptions } = {}) => {
+      if (
+        typeof lat === "number" &&
+        typeof lng === "number" &&
+        typeof radius_m === "number"
+      ) {
+        return { lat, lng, radius_m };
+      }
 
-    warmupInflightRef.current = true;
-    lastWarmupAtRef.current = now;
+      try {
+        const loc = await getBrowserLocation(geoOptions);
+        const r = Math.round((km ?? DEFAULT_WARMUP_KM) * 1000);
+        return { lat: loc.lat, lng: loc.lng, radius_m: r };
+      } catch {
+        // 위치 못 얻으면 refresh는 바디 없이(백엔드 허용 시) 시도
+        return {};
+      }
+    },
+    []
+  );
 
-    // ✅ UX 느려지지 않게 백그라운드로만 실행
-    Promise.resolve()
-      .then(() => collectDetails({}).catch(() => {}))
-      .then(() => refreshStatus({}).catch(() => {}))
-      // ✅ refresh 후 logs를 2~3번 재시도해서 "최초 유효 logs" 확보 확률↑
-      .then(() => syncLogsWithRetry().catch(() => {}))
-      .catch(() => {})
-      .finally(() => {
-        warmupInflightRef.current = false;
-      });
-  }, [syncLogsWithRetry]);
+  const warmupIfNeeded = useCallback(
+    (args = {}) => {
+      const now = Date.now();
+      if (warmupInflightRef.current) return;
+      if (now - lastWarmupAtRef.current < DEFAULT_WARMUP_COOLDOWN_MS) return;
+
+      warmupInflightRef.current = true;
+      lastWarmupAtRef.current = now;
+
+      Promise.resolve()
+        // ✅ 1) collect_details는 그대로 실행
+        .then(() => collectDetails({}).catch(() => {}))
+        // ✅ 2) refresh_status는 좌표/반경 포함
+        .then(() => resolveRefreshBody(args))
+        .then((body) => refreshStatus(body).catch(() => {}))
+        // ✅ 3) logs 재시도
+        .then(() => syncLogsWithRetry().catch(() => {}))
+        .catch(() => {})
+        .finally(() => {
+          warmupInflightRef.current = false;
+        });
+    },
+    [resolveRefreshBody, syncLogsWithRetry]
+  );
 
   useEffect(() => {
+    if (!logsPollingEnabled) return;
+
     let alive = true;
-
-    // 1) 앱 시작 즉시 logs 1회 (빠른 표시용)
-    syncLogs({ force: false }).catch(() => {});
-
-    // 2) 30초마다 logs 갱신
     const id = setInterval(() => {
       if (!alive) return;
       syncLogs({ force: false }).catch(() => {});
     }, DEFAULT_LOGS_TTL_MS);
 
-    // 3) 무거운 warmup은 첫 진입 때 조용히 1번 시작 (쿨다운으로 중복 방지)
-    const t = setTimeout(() => {
-      if (!alive) return;
-      warmupIfNeeded();
-    }, 1500);
-
     return () => {
       alive = false;
       clearInterval(id);
-      clearTimeout(t);
     };
-  }, [syncLogs, warmupIfNeeded]);
+  }, [logsPollingEnabled, syncLogs]);
+
+  // ✅ 순서 고정 warmup (Layout에서 collect/places 이후에 호출)
+  const warmupOrdered = useCallback(
+    async (args = {}) => {
+      await collectDetails({}).catch(() => {});
+      const body = await resolveRefreshBody(args);
+      await refreshStatus(body).catch(() => {});
+      await syncLogsWithRetry().catch(() => {});
+    },
+    [resolveRefreshBody, syncLogsWithRetry]
+  );
 
   const value = useMemo(
     () => ({
@@ -158,9 +196,20 @@ export function CafeStatusProvider({ children }) {
       syncLogs,
       syncLogsWithRetry,
       warmupIfNeeded,
+      warmupOrdered,
+      logsPollingEnabled,
+      setLogsPollingEnabled,
       lastGoodLogsAt: lastGoodLogsAtRef.current,
     }),
-    [openStatusMap, version, syncLogs, syncLogsWithRetry, warmupIfNeeded]
+    [
+      openStatusMap,
+      version,
+      syncLogs,
+      syncLogsWithRetry,
+      warmupIfNeeded,
+      warmupOrdered,
+      logsPollingEnabled,
+    ]
   );
 
   return <CafeStatusCtx.Provider value={value}>{children}</CafeStatusCtx.Provider>;
