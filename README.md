@@ -1,16 +1,190 @@
-# React + Vite
+<div align="center">
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+# 🌙 늦좋카 (LateGoodCafe)
 
-Currently, two official plugins are available:
+## “늦게까지 여는 좋은 카페”
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+현재 시간 기준,  
+**가장 늦게까지 영업하는 카페를 가장 빠르게 찾는 서비스**
 
-## React Compiler
+---
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+</div>
 
-## Expanding the ESLint configuration
+---
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+# 1. 프로젝트 개요
+
+‘늦좋카’는 “늦게까지 여는 좋은 카페”의 줄임말로,  
+사용자 주변에서 **현재 시각 기준 가장 늦게까지 영업하는 카페를 탐색**하도록 설계된 위치 기반 서비스입니다.
+
+늦은 시간 카페를 찾기 위해  
+지도 앱, SNS, 검색을 반복하며 영업 여부를 직접 확인해야 하는  
+기존 사용자 경험의 비효율성에 주목하였습니다.
+
+기존 지도 서비스는  
+- 거리순 정렬 중심 구조  
+- 시간대 특화 필터 부족  
+- 야간 사용자 경험 고려 미흡  
+
+이라는 한계를 가지고 있습니다.
+
+본 프로젝트는 **시간(Time) + 위치(Location)** 를 핵심 기준으로 설계되어  
+야간 탐색에 최적화된 구조를 제공합니다.
+
+---
+
+# 2. 서비스 목표
+
+- 현재 시간 기준 이용 가능한 카페 즉시 제공
+- 영업 종료 시간이 늦은 순 정렬
+- 반경 기반 카페 탐색 최적화
+- 지도 기반 시각화 및 경로 연결
+- 야간 사용자 중심 UX 설계
+
+---
+
+# 3. 서비스 구성 (5개 주요 화면)
+
+---
+
+## 3.1 홈 (Home)
+
+랜덤 추천 기반의 빠른 선택 UX 제공
+
+- 오늘의 카페 추천
+- 오늘의 메뉴 추천
+- 랜덤 함수 기반 큐레이션
+- 즉시 이동 버튼 제공
+
+---
+
+## 3.2 카페찾기 (Find Cafe)
+
+핵심 기능 화면
+
+### 동작 흐름
+1. 사용자 위치 수집
+2. 서버 전송
+3. Kakao Place API 호출
+4. 현재 시간 기준 영업 필터링
+5. 영업 종료 시간 기준 내림차순 정렬
+6. 지도 + 리스트 UI 출력
+
+### 핵심 기능
+- 반경 내 카페 탐색
+- 영업 종료 시간 기준 정렬
+- 지도 기반 길찾기 연결
+
+---
+
+## 3.3 24시 카페 (24H Cafe)
+
+- 24시간 운영 카페만 필터링
+- 거리순 정렬
+- 야간 접근성 최적화
+
+---
+
+## 3.4 즐겨찾기 (Favorites)
+
+로그인 기반 개인화 기능
+
+- 카페찾기 화면에서 ⭐ 클릭
+- 사용자 ID + 카페 정보 + 개인 메모 → DB 저장
+- 즐겨찾기 화면에서 조회
+- 나만의 카페 기록 관리
+
+---
+
+## 3.5 마이페이지 (My Page)
+
+### Policy
+- 이용약관
+- 개인정보 처리방침
+- 위치기반 서비스 약관
+- 책임 제한 고지
+- 저작권 정책
+
+### Support
+- 고객센터
+- 1:1 문의하기
+- 서비스 오류 신고
+- 개선 의견 보내기
+
+### About
+- 서비스 소개
+- 기획 의도
+- 주요 기능
+- 개발팀 소개
+  - 프론트엔드
+  - 백엔드
+  - 디자인
+
+---
+
+# 4. 핵심 기능 요약
+
+## 주요 기능
+- 반경 내 카페 탐색
+- 영업 종료 시간 기준 정렬
+- 지도 기반 경로 연결
+
+## 부가 기능
+- 랜덤 추천 시스템
+- 24시간 카페 필터
+- 즐겨찾기 저장
+- 개인 메모 작성
+
+---
+
+# 5. Technology Stack
+
+<div align="center">
+
+## Frontend
+
+<img src="https://skillicons.dev/icons?i=react" height="45" />
+<img src="https://skillicons.dev/icons?i=html" height="45" />
+<img src="https://skillicons.dev/icons?i=css" height="45" />
+<img src="https://skillicons.dev/icons?i=js" height="45" />
+<img src="https://skillicons.dev/icons?i=vite" height="45" />
+
+---
+
+## Backend
+
+<img src="https://skillicons.dev/icons?i=django" height="45" />
+<img src="https://skillicons.dev/icons?i=postgres" height="45" />
+
+---
+
+## API & Architecture
+
+- Django REST Framework 기반 API 설계
+- PostgreSQL 데이터베이스 구조
+- 위치 기반 데이터 처리 로직
+- Kakao Place API 연동
+
+</div>
+
+---
+
+# 6. 서비스 핵심 가치
+
+- 시간 중심 탐색 구조
+- 위치 기반 최적화
+- 야간 사용자 특화 설계
+- 단순하고 빠른 정보 전달
+
+---
+
+<div align="center">
+
+## 🌃 “지금 이 시간, 가장 늦게 닫는 카페는 어디인가?”
+
+늦좋카는  
+야간 카페 탐색의 복잡함을 제거하고  
+가장 직관적인 선택을 제공합니다.
+
+</div>
